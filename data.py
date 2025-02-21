@@ -2,22 +2,28 @@ import os
 import requests
 import sqlite3
 import pandas as pd
+import gdown
 
 DB_FILE = "fraud_data.db"
-DRIVE_FILE_ID = "1RQu28-etwF4BcO62-Lr4gnZPkul6pCnJ"  # Replace with actual File ID
-DRIVE_URL = f"https://drive.google.com/uc?export=download&id={DRIVE_FILE_ID}"
+file_id = "1RQu28-etwF4BcO62-Lr4gnZPkul6pCnJ"  # Replace with actual File ID
+output = "fraud_data.db"
 
-def download_db():
-    """Download the SQLite database if not present locally."""
-    if not os.path.exists(DB_FILE):
-        print("Downloading database from Google Drive...")
-        response = requests.get(DRIVE_URL)
-        with open(DB_FILE, "wb") as f:
-            f.write(response.content)
-        print("Database downloaded successfully.")
+# DRIVE_URL = f"https://drive.google.com/uc?export=download&id={DRIVE_FILE_ID}"
+
+def download_database():
+    """Downloads the database file from Google Drive."""
+    print("⬇️ Downloading database file from Google Drive...")
+    gdown.download(f"https://drive.google.com/uc?id={file_id}", output, quiet=False)
+
+    # Check if the file exists and has a reasonable size
+    if os.path.exists(output) and os.path.getsize(output) > 0:
+        print(f"✅ Database successfully downloaded. File size: {os.path.getsize(output)} bytes")
+    else:
+        print("❌ Failed to download a valid database file.")
 
 
-download_db()
+
+download_database()
 
 
 def load_data():
