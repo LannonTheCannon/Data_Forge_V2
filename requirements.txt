@@ -2,3 +2,4 @@ openai
 pandasai==1.4.10
 pandas==1.5.3
 streamlit
+python==3.9
