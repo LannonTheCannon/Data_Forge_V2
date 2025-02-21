@@ -35,7 +35,9 @@ class StreamlitResponse(ResponseParser):
 
 st.write("# Chat with Credit Card Fraud Dataset 🦙")
 
-df = load_data("./data")
+# df = load_data("./data")
+
+df = load_data()
 
 with st.expander("🔎 Dataframe Preview"):
     st.write(df.tail(5))
