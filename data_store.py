@@ -3,17 +3,22 @@ import pickle
 import pandas as pd
 from pathlib import Path
 
+# This file only needs to be run once in order to gather all of that data
+
 DB_FILE = "fraud_data.db"
 
-
 def load_file(path: str) -> pd.DataFrame:
-    """Load data from a pickle file."""
+    """
+    loads data from pkl files
+    """
     with open(path, "rb") as f:
         return pickle.load(f)
 
 
 def save_to_sqlite(folder: str, db_file: str = DB_FILE):
-    """Convert all .pkl files into an SQLite database."""
+    """
+    Convert all pickle files into an SQLite database
+    """
     conn = sqlite3.connect(db_file)
 
     # Load and store each file into SQLite
