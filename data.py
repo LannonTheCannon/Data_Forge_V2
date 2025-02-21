@@ -11,7 +11,7 @@ def download_db():
     """Download the SQLite database if not present locally."""
     if not os.path.exists(DB_FILE):
         print("Downloading database from Google Drive...")
-        response = requests.get(DRIVE_URL)
+        response = requests.get(DRIVE_URL, timeout=60)
         with open(DB_FILE, "wb") as f:
             f.write(response.content)
         print("Database downloaded successfully.")
