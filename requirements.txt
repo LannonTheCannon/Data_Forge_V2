@@ -5,4 +5,4 @@ pandasai==1.4.10
 openai
 gdown
 seaborn
-sklearn
+scikit-learn
