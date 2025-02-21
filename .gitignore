@@ -163,3 +163,4 @@ Miniconda3-latest-MacOSX-arm64.sh
 fraud_data.db
 
 .streamlit/secrets.toml
+*.toml
