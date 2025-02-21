@@ -1,37 +1,26 @@
-import pickle
-from pathlib import Path
-
+]import sqlite3
 import pandas as pd
-import streamlit as st
-
-
-# def load_file(path: str) -> pd.DataFrame:
-#     with open(path, "rb") as f:
-#         dataset = pickle.load(f)
-#         return dataset
-#
-#
-# @st.cache_data
-# def load_data(folder: str) -> pd.DataFrame:
-#     all_datasets = [load_file(file) for file in Path(folder).iterdir()]
-#     df = pd.concat(all_datasets)
-#     return df
-
-import sqlite3
-import pandas as pd
-import streamlit as st
+import requests
+import os
 
 DB_FILE = "fraud_data.db"
+DRIVE_FILE_ID = "1RQu28-etwF4BcO62-Lr4gnZPkul6pCnJ"  # Replace with your actual File ID
+DRIVE_URL = f"https://drive.google.com/uc?export=download&id={DRIVE_FILE_ID}"
 
+def download_db():
+    """Download the SQLite database if not present locally."""
+    if not os.path.exists(DB_FILE):
+        print("Downloading database from Google Drive...")
+        response = requests.get(DRIVE_URL)
+        with open(DB_FILE, "wb") as f:
+            f.write(response.content)
+        print("Database downloaded successfully.")
 
-@st.cache_data
-def load_data() -> pd.DataFrame:
-    """Load data from SQLite instead of pickle files."""
+download_db()
+
+def load_data():
+    """Load the SQLite database."""
     conn = sqlite3.connect(DB_FILE)
-
-    # Load only what is needed (OPTIONAL: Add WHERE clauses for filters)
-    query = "SELECT * FROM fraud_data LIMIT 100000;"  # Change LIMIT based on performance
-    df = pd.read_sql(query, conn)
-
+    df = pd.read_sql("SELECT * FROM fraud_data LIMIT 100000;", conn)  # Adjust query as needed
     conn.close()
     return df
