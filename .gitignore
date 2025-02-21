@@ -160,7 +160,11 @@ cython_debug/
 #.idea/
 Miniconda3-latest-MacOSX-arm64.sh
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 fraud_data.db
+=======
+fraud_data.db
+>>>>>>> Stashed changes
 =======
 fraud_data.db
 >>>>>>> Stashed changes
