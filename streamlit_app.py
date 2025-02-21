@@ -61,27 +61,14 @@ left_column, right_column = st.columns([1, 1])
 left_code_container = left_column.empty()  # AI-Generated Code
 left_chart_container = left_column.empty()  # Temp Chart (below AI Code)
 
-# Initialize session state for generated code
+# Initialize session state for generated code and editor text
 if "generated_code" not in st.session_state:
     st.session_state.generated_code = ""
 
-# Right Column Layout
-with right_column:
-    # Code Editor Container (only initialized once)
-    edited_code = st_ace(
-        value=st.session_state.generated_code,
-        language="python",
-        theme="monokai",
-        key="code_editor",  # Ensure a unique key
-        height=800,
-    )
+if "editor_code" not in st.session_state:
+    st.session_state.editor_code = ""  # Ensure it's initialized
 
-    # "Run Code" Button
-    run_button = st.button("Run Code")
-
-    # Placeholder for Chart Output (Ensures it is BELOW the button)
-    right_chart_container = st.empty()
-
+# 🚀 **Process User Query**
 if query:
     llm = OpenAI(api_token=os.environ["OPENAI_API_KEY"])
     callback_handler = StreamlitCallback(left_code_container)
@@ -98,18 +85,39 @@ if query:
     answer = query_engine.chat(query)
     generated_code = callback_handler.get_generated_code()
 
-    # Update session state with AI-generated code
+    # **Update session state with AI-generated code**
     st.session_state.generated_code = generated_code
+    st.session_state.editor_code = generated_code  # **Sync with editor!**
 
-    # Update the Left Side Code Display
-    left_code_container.code(generated_code, language="python")
+    # **Force rerun to update the editor with generated code**
+    #st.rerun()
+
+# **Code Editor & Execution Section**
+with right_column:
+    # **Force Editor to use updated code**
+    edited_code = st_ace(
+        value=st.session_state.editor_code,  # This will now be correctly updated
+        language="python",
+        theme="monokai",
+        key=f"code_editor_{hash(st.session_state.editor_code)}",  # Unique key
+        height=800,
+    )
+
+    # **Update session state when editor changes**
+    st.session_state.editor_code = edited_code
+
+    # "Run Code" Button
+    run_button = st.button("Run Code")
+
+    # Placeholder for Chart Output (Ensures it is BELOW the button)
+    right_chart_container = st.empty()
 
 if run_button:
     try:
         exec_locals = {}  # Isolated local execution
 
         # Execute User-Edited Code
-        exec(edited_code, {"df": df, "pd": pd, "plt": plt, "st": st}, exec_locals)
+        exec(st.session_state.editor_code, {"df": df, "pd": pd, "plt": plt, "st": st}, exec_locals)
 
         # Run function if it exists
         if "analyze_data" in exec_locals:
