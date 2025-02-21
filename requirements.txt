@@ -6,3 +6,4 @@ openai
 gdown
 seaborn
 scikit-learn
+streamlit-ace
