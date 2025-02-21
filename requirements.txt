@@ -1,5 +1,6 @@
 openai
 pandasai==1.4.10
-pandas==1.5.3
-streamlit
 python==3.9
+streamlit==1.29.0
+pandas==1.5.3
+numpy==1.23.5
