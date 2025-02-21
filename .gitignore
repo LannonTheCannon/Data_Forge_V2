@@ -166,3 +166,6 @@ fraud_data.db
 fraud_data.db
 >>>>>>> Stashed changes
 =======
+
+.streamlit/secrets.toml
+.streamlit/secrets.toml

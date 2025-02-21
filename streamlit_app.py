@@ -1,11 +1,9 @@
 import os
-
 import streamlit as st
 from pandasai import SmartDataframe
 from pandasai.callbacks import BaseCallback
 from pandasai.llm import OpenAI
 from pandasai.responses.response_parser import ResponseParser
-
 from data import load_data
 
 class StreamlitCallback(BaseCallback):
@@ -32,12 +30,12 @@ class StreamlitResponse(ResponseParser):
         st.write(result["value"])
         return
 
-
 st.write("# Chat with Credit Card Fraud Dataset 🦙")
 
-# df = load_data("./data")
-
+# Debugging: Check if database loads
+st.write("Loading data from SQLite...")
 df = load_data()
+st.write(f"✅ Data Loaded: {df.shape}")
 
 with st.expander("🔎 Dataframe Preview"):
     st.write(df.tail(5))
@@ -46,16 +44,24 @@ query = st.text_area("🗣️ Chat with Dataframe")
 container = st.container()
 
 if query:
-    # llm = OpenAI(api_token=os.environ["OPENAI_API_KEY"])
+    st.write(f"Processing query: `{query}`")
 
-    llm = OpenAI(api_token=st.secrets["OPENAI_API_KEY"])
-    query_engine = SmartDataframe(
-        df,
-        config={
-            "llm": llm,
-            "response_parser": StreamlitResponse,
-            "callback": StreamlitCallback(container),
-        },
-    )
+    try:
+        llm = OpenAI(api_token=st.secrets["OPENAI_API_KEY"])
+        st.write("✅ OpenAI API Key loaded successfully!")
 
-    answer = query_engine.chat(query)
+        query_engine = SmartDataframe(
+            df,
+            config={
+                "llm": llm,
+                "response_parser": StreamlitResponse,
+                "callback": StreamlitCallback(container),
+            },
+        )
+
+        st.write("Sending query to SmartDataframe...")
+        answer = query_engine.chat(query)
+        st.write(f"✅ Response: {answer}")
+
+    except Exception as e:
+        st.error(f"⚠️ Error processing query: {e}")

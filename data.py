@@ -21,6 +21,6 @@ download_db()
 def load_data():
     """Load the SQLite database."""
     conn = sqlite3.connect(DB_FILE)
-    df = pd.read_sql("SELECT * FROM fraud_data LIMIT 100000;", conn)  # Adjust query as needed
+    df = pd.read_sql("SELECT * FROM fraud_data LIMIT 10000;", conn)  # Adjust query as needed
     conn.close()
     return df
