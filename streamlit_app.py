@@ -9,6 +9,7 @@ from streamlit_ace import st_ace  # Streamlit code editor
 import seaborn as sns
 import pandas as pd
 import matplotlib.pyplot as plt
+import inspect  # ✅ NEW: Check function signature dynamically
 
 # Enable Wide Mode
 st.set_page_config(layout="wide")
@@ -41,7 +42,6 @@ class StreamlitResponse(ResponseParser):
         """
         Temp Chart now appears in the left column below the code
         """
-
         left_chart_container.image(result["value"])
 
     def format_other(self, result):
@@ -92,10 +92,8 @@ if query:
     st.session_state.generated_code = generated_code
     st.session_state.editor_code = generated_code  # **Sync with editor!**
 
-
 # ✅ **Show the code editor & run button ONLY IF a query was submitted**
 if st.session_state.generated_code:
-
     # ✅ Right Column Layout (Editor + Button Closer)
     with right_column:
         # Code Editor
@@ -129,9 +127,15 @@ if st.session_state.generated_code:
                 "df": df, "pd": pd, "plt": plt, "st": st, "sns": sns
             }, exec_locals)
 
-            # Run function if it exists
+            # ✅ **Check function parameters before calling**
             if "analyze_data" in exec_locals:
-                result = exec_locals["analyze_data"]([df], user_input="")  # Call function with DataFrame list
+                analyze_func = exec_locals["analyze_data"]
+                params = inspect.signature(analyze_func).parameters  # Get function parameters
+
+                if "user_input" in params:
+                    result = analyze_func([df], user_input="")  # ✅ Pass default empty string
+                else:
+                    result = analyze_func([df])  # ✅ Call normally if 'user_input' isn’t required
 
                 # Place the chart **DIRECTLY BELOW the code editor**
                 if result["type"] == "plot":
@@ -142,10 +146,6 @@ if st.session_state.generated_code:
                     right_chart_container.write(result["value"])
                 elif result["type"] == "number":
                     right_chart_container.write(f"Result: {result['value']}")
-
-        except Exception as e:
-            st.error(f"⚠️ Error running the code: {e}")
-
 
         except Exception as e:
             st.error(f"⚠️ Error running the code: {e}")

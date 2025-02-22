@@ -46,7 +46,7 @@ def load_data():
     try:
         conn = sqlite3.connect(DB_FILE)
         print("✅ Database successfully opened")
-        df = pd.read_sql("SELECT * FROM fraud_data LIMIT 100000;", conn) # I set it at 10000 because 1.7M takes forever to load
+        df = pd.read_sql("SELECT * FROM fraud_data LIMIT 1000;", conn) # I set it at 10000 because 1.7M takes forever to load
         conn.close()
         return df
 
