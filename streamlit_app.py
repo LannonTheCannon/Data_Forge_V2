@@ -6,7 +6,7 @@ from pandasai.llm import OpenAI
 from pandasai.responses.response_parser import ResponseParser
 from data import load_data
 from streamlit_ace import st_ace  # Streamlit code editor
-
+import seaborn as sns
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -89,49 +89,60 @@ if query:
     st.session_state.generated_code = generated_code
     st.session_state.editor_code = generated_code  # **Sync with editor!**
 
-    # **Force rerun to update the editor with generated code**
-    #st.rerun()
 
-# **Code Editor & Execution Section**
-with right_column:
-    # **Force Editor to use updated code**
-    edited_code = st_ace(
-        value=st.session_state.editor_code,  # This will now be correctly updated
-        language="python",
-        theme="monokai",
-        key=f"code_editor_{hash(st.session_state.editor_code)}",  # Unique key
-        height=800,
-    )
+# ✅ **Show the code editor & run button ONLY IF a query was submitted**
+if st.session_state.generated_code:
 
-    # **Update session state when editor changes**
-    st.session_state.editor_code = edited_code
+    # ✅ Right Column Layout (Editor + Button Closer)
+    with right_column:
+        # Code Editor
+        edited_code = st_ace(
+            value=st.session_state.editor_code,
+            language="python",
+            theme="tomorrow",
+            key="code_editor",  # Ensure key is static to persist state
+            height=750,
+        )
 
-    # "Run Code" Button
-    run_button = st.button("Run Code")
+        # 🔹 Store edited code back to session state before running
+        st.session_state.editor_code = edited_code
 
-    # Placeholder for Chart Output (Ensures it is BELOW the button)
-    right_chart_container = st.empty()
+        # **Move Button Directly Under Editor (No Extra Gaps)**
+        col1, col2 = st.columns([3, 1])  # Create button row (aligned right)
+        with col1:
+            st.write("")  # Placeholder for spacing
+        with col2:
+            run_button = st.button("🚀 Run Code")  # Aligns right & closer to editor
 
-if run_button:
-    try:
-        exec_locals = {}  # Isolated local execution
+        # Placeholder for Chart Output **DIRECTLY BELOW**
+        right_chart_container = st.empty()
 
-        # Execute User-Edited Code
-        exec(st.session_state.editor_code, {"df": df, "pd": pd, "plt": plt, "st": st}, exec_locals)
+    if run_button:
+        try:
+            exec_locals = {}  # Isolated local execution
 
-        # Run function if it exists
-        if "analyze_data" in exec_locals:
-            result = exec_locals["analyze_data"]([df])  # Call function with DataFrame list
+            # 🟢 **Use the latest user-edited code**
+            exec(st.session_state.editor_code, {
+                "df": df, "pd": pd, "plt": plt, "st": st, "sns": sns
+            }, exec_locals)
 
-            # Place the chart **DIRECTLY BELOW the code editor**
-            if result["type"] == "plot":
-                right_chart_container.image(result["value"])
-            elif result["type"] == "dataframe":
-                right_chart_container.dataframe(result["value"])
-            elif result["type"] == "string":
-                right_chart_container.write(result["value"])
-            elif result["type"] == "number":
-                right_chart_container.write(f"Result: {result['value']}")
+            # Run function if it exists
+            if "analyze_data" in exec_locals:
+                result = exec_locals["analyze_data"]([df])  # Call function with DataFrame list
 
-    except Exception as e:
-        st.error(f"⚠️ Error running the code: {e}")
+                # Place the chart **DIRECTLY BELOW the code editor**
+                if result["type"] == "plot":
+                    right_chart_container.image(result["value"])
+                elif result["type"] == "dataframe":
+                    right_chart_container.dataframe(result["value"])
+                elif result["type"] == "string":
+                    right_chart_container.write(result["value"])
+                elif result["type"] == "number":
+                    right_chart_container.write(f"Result: {result['value']}")
+
+        except Exception as e:
+            st.error(f"⚠️ Error running the code: {e}")
+
+
+        except Exception as e:
+            st.error(f"⚠️ Error running the code: {e}")
