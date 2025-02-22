@@ -16,15 +16,16 @@ st.set_page_config(layout="wide")
 
 
 class StreamlitCallback(BaseCallback):
-    def __init__(self, left_container) -> None:
+    def __init__(self, left_code_container, left_response_container) -> None:
         """Initialize callback handler."""
-        self.left_container = left_container
+        self.left_code_container = left_code_container
+        self.left_response_container = left_response_container
         self.generated_code = ""
 
     def on_code(self, response: str):
         """Displays AI-generated code"""
         self.generated_code = response
-        self.left_container.code(response, language="python")
+        self.left_code_container.code(response, language="python")
 
     def get_generated_code(self):
         """Returns the last generated code"""
@@ -36,16 +37,16 @@ class StreamlitResponse(ResponseParser):
         super().__init__(context)
 
     def format_dataframe(self, result):
-        st.dataframe(result["value"])
+        """Ensures DataFrames appear below the AI-generated code"""
+        left_response_container.dataframe(result["value"])
 
     def format_plot(self, result):
-        """
-        Temp Chart now appears in the left column below the code
-        """
-        left_chart_container.image(result["value"])
+        """Ensures Charts appear below the AI-generated code"""
+        left_response_container.image(result["value"])
 
     def format_other(self, result):
-        st.write(result["value"])
+        """Ensures Text responses appear properly formatted on the left side"""
+        left_response_container.markdown(f"### 📌 AI Insight\n\n{result['value']}")
 
 
 st.write("# Chat with Credit Card Fraud Dataset 🦙")
@@ -58,11 +59,11 @@ with st.expander("🔎 Dataframe Preview"):
 
 query = st.text_area("🗣️ Ask a Data Analysis Question:")
 
-# Two Columns: Left (Generated Code & Chart), Right (Editable Code Editor & Chart Output)
+# Two Columns: Left (Generated Code & Response), Right (Editable Code Editor & Chart Output)
 left_column, right_column = st.columns([1, 1])
 
 left_code_container = left_column.empty()  # AI-Generated Code
-left_chart_container = left_column.empty()  # Temp Chart (below AI Code)
+left_response_container = left_column.empty()  # ✅ Response Container (Chart/Text/Table)
 
 # Initialize session state for generated code and editor text
 if "generated_code" not in st.session_state:
@@ -74,7 +75,7 @@ if "editor_code" not in st.session_state:
 # 🚀 **Process User Query**
 if query:
     llm = OpenAI(api_token=os.environ["OPENAI_API_KEY"])
-    callback_handler = StreamlitCallback(left_code_container)
+    callback_handler = StreamlitCallback(left_code_container, left_response_container)
 
     query_engine = SmartDataframe(
         df,
@@ -143,7 +144,7 @@ if st.session_state.generated_code:
                 elif result["type"] == "dataframe":
                     right_chart_container.dataframe(result["value"])
                 elif result["type"] == "string":
-                    right_chart_container.write(result["value"])
+                    right_chart_container.markdown(f"### 📌 AI Insight\n\n{result['value']}")
                 elif result["type"] == "number":
                     right_chart_container.write(f"Result: {result['value']}")
 
