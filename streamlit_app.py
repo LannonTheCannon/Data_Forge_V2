@@ -38,7 +38,10 @@ class StreamlitResponse(ResponseParser):
         st.dataframe(result["value"])
 
     def format_plot(self, result):
-        """Temp Chart now appears in the left column below the code"""
+        """
+        Temp Chart now appears in the left column below the code
+        """
+
         left_chart_container.image(result["value"])
 
     def format_other(self, result):
@@ -128,7 +131,7 @@ if st.session_state.generated_code:
 
             # Run function if it exists
             if "analyze_data" in exec_locals:
-                result = exec_locals["analyze_data"]([df])  # Call function with DataFrame list
+                result = exec_locals["analyze_data"]([df], user_input="")  # Call function with DataFrame list
 
                 # Place the chart **DIRECTLY BELOW the code editor**
                 if result["type"] == "plot":
