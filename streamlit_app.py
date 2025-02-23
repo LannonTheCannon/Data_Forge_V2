@@ -295,11 +295,6 @@ if page == "Dataset Overview":
     st.write("### Dataset Info (df.info())")
     st.text(info_str)
 
-    # Optional: Simple correlation heatmap
-    if st.button("Show Correlation Heatmap"):
-        fig, ax = plt.subplots(figsize=(8, 6))
-        sns.heatmap(df.corr(numeric_only=True), annot=True, cmap="Blues", ax=ax)
-        st.pyplot(fig)
 
     st.info("Use the sidebar to navigate to other pages.")
 
