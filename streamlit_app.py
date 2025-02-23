@@ -2,6 +2,7 @@ import os
 import time
 import base64
 import shutil
+import io
 import openai
 import sqlite3
 import requests
@@ -18,7 +19,6 @@ from pandasai.callbacks import BaseCallback
 from pandasai.llm import OpenAI as PandasOpenAI
 from pandasai.responses.response_parser import ResponseParser
 
-
 # -----------------------------
 # 1) Streamlit Setup + Page Config
 # -----------------------------
@@ -28,12 +28,9 @@ st.set_page_config(layout="wide")
 # 2) OpenAI & Assistant Setup
 # -----------------------------
 ASSISTANT_ID = "asst_HzB5u4pHtDOHQC6lGMIbg1Tk"  # Replace with your Assistant ID
-THREAD_ID = "thread_CTvS2U0BP4wJjna8rqXCLgCF"   # Replace with your Thread ID
+THREAD_ID = "thread_CTvS2U0BP4wJjna8rqXCLgCF"  # Replace with your Thread ID
 
 client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-
-# If you need the Beta endpoints (like client.beta.threads), ensure your openai lib is updated
-# For demonstration, we'll assume the usage is correct.
 
 # -----------------------------
 # 3) Session State
@@ -79,6 +76,7 @@ def load_data():
     conn.close()
     return df
 
+
 df = load_data()  # Load once at startup
 
 
@@ -89,6 +87,7 @@ def encode_image(image_path):
     """Encodes an image to Base64 for OpenAI Vision API."""
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode("utf-8")
+
 
 def analyze_chart_with_openai(image_path):
     """Sends the generated chart to OpenAI GPT-4 Vision API and returns insights."""
@@ -129,6 +128,7 @@ def analyze_chart_with_openai(image_path):
     except Exception as e:
         return f"⚠️ Error analyzing chart: {e}"
 
+
 # -----------------------------
 # 6) Assistant API Functions
 # -----------------------------
@@ -161,6 +161,7 @@ def get_assistant_response(assistant_id, thread_id, user_input):
         st.error(f"Error getting assistant response: {str(e)}")
         return "I'm sorry, but an error occurred while processing your request."
 
+
 def get_avatar(role):
     """Returns avatar URLs for user vs. assistant. Adjust as you like."""
     if role == "user":
@@ -169,6 +170,7 @@ def get_avatar(role):
         return "https://ladygeekgirl.wordpress.com/wp-content/uploads/2015/10/mark-watney-matt-damon.jpg"
     else:
         return None
+
 
 def display_chatbot():
     """Displays the Mark Watney Chatbot with persistent messages."""
@@ -204,6 +206,7 @@ def display_chatbot():
 # -----------------------------
 class StreamlitCallback(BaseCallback):
     """Displays AI-generated code."""
+
     def __init__(self, code_container, response_container) -> None:
         self.code_container = code_container
         self.response_container = response_container
@@ -217,10 +220,10 @@ class StreamlitCallback(BaseCallback):
     def get_generated_code(self):
         return self.generated_code
 
+
 class StreamlitResponse(ResponseParser):
-    """
-    Avoid double-loading charts. Just save to temp_chart.png if it's a plot.
-    """
+    """Avoid double-loading charts. Just save to temp_chart.png if it's a plot."""
+
     def __init__(self, context) -> None:
         super().__init__(context)
 
@@ -257,19 +260,58 @@ class StreamlitResponse(ResponseParser):
 
 
 # -----------------------------
-# 8) App Layout - Three Pages
+# 8) App Layout - 5 Pages
 # -----------------------------
-page = st.sidebar.radio("Select a Page", ["Assistant Chat", "PandasAI Insights", "Code Editor"])
+PAGE_OPTIONS = [
+    "Dataset Overview",
+    "Assistant Chat",
+    "PandasAI Insights",
+    "Code Editor",
+    "Documentation"
+]
+page = st.sidebar.radio("Select a Page", PAGE_OPTIONS)
 
-# ============================
-# PAGE 1: Assistant Chat
-# ============================
-if page == "Assistant Chat":
+# -----------------------------------------------------
+# PAGE 1: DATASET OVERVIEW
+# -----------------------------------------------------
+if page == "Dataset Overview":
+    st.title("Dataset Overview")
+
+    st.write("### Data Preview")
+    st.write(df.head(5))
+
+    # Using df.describe() for quick stats
+    st.write("### Quick Statistics (df.describe())")
+    st.write(df.describe())
+
+    # Using df.info() for structure.
+    # df.info() prints to stdout, so let's capture it:
+    import io
+
+    buffer = io.StringIO()
+    df.info(buf=buffer)
+    info_str = buffer.getvalue()
+
+    st.write("### Dataset Info (df.info())")
+    st.text(info_str)
+
+    # Optional: Simple correlation heatmap
+    if st.button("Show Correlation Heatmap"):
+        fig, ax = plt.subplots(figsize=(8, 6))
+        sns.heatmap(df.corr(numeric_only=True), annot=True, cmap="Blues", ax=ax)
+        st.pyplot(fig)
+
+    st.info("Use the sidebar to navigate to other pages.")
+
+# -----------------------------------------------------
+# PAGE 2: ASSISTANT CHAT
+# -----------------------------------------------------
+elif page == "Assistant Chat":
     display_chatbot()
 
-# ============================
-# PAGE 2: PandasAI Insights
-# ============================
+# -----------------------------------------------------
+# PAGE 3: PANDASAI INSIGHTS
+# -----------------------------------------------------
 elif page == "PandasAI Insights":
     st.title("PandasAI Analysis & GPT-4 Vision")
 
@@ -322,10 +364,10 @@ elif page == "PandasAI Insights":
     if not st.session_state.generated_code and not st.session_state.chart_generated:
         st.info("Enter a query above to generate a chart with PandasAI.")
 
-# ============================
-# PAGE 3: Code Editor
-# ============================
-else:
+# -----------------------------------------------------
+# PAGE 4: CODE EDITOR
+# -----------------------------------------------------
+elif page == "Code Editor":
     st.title("User Code Editor & Execution")
 
     if st.session_state.generated_code:
@@ -380,3 +422,40 @@ else:
                 st.write(f"Result: {result['value']}")
     else:
         st.info("No generated code yet. Please go to 'PandasAI Insights' and enter a query first.")
+
+# -----------------------------------------------------
+# PAGE 5: DOCUMENTATION
+# -----------------------------------------------------
+else:
+    st.title("Documentation")
+    st.write("Below is the complete application code and explanations on how each part works.")
+    st.markdown("""---""")
+
+    # 📝 Provide an overview:
+    st.markdown("""
+    **Overview**:
+    1. **Dataset Overview**: A quick summary (head, describe, info, optional heatmap) to help users see the data structure.
+    2. **Assistant Chat**: A Mark Watney chatbot (with a custom avatar) that can retrieve data context from your vector store/Assistants API. 
+    3. **PandasAI Insights**: Uses `SmartDataframe` to generate Python code for data exploration, plus a GPT-4 Vision button for chart interpretation.
+    4. **Code Editor**: Allows the user to review and modify the AI-generated code, then run it within Streamlit.
+    5. **Documentation**: Shows the entire code with an explanation.
+
+    The code handles:
+    - **SQLite** data loading
+    - **Session state** for preserving AI-generated code and chat messages
+    - **Chat** messages for the Mark Watney assistant
+    - **PandasAI** for auto code generation + chart creation
+    - **GPT-4 Vision** for chart interpretation
+    """)
+
+    st.markdown("""---""")
+    st.write("**Full Source Code**:")
+    with st.expander("Click to Expand Full Code", expanded=False):
+        full_code = r'''<PASTE_THE_CODE_HERE>'''
+        # Instead of embedding your entire code as a variable,
+        # you can store it in a separate file or dynamically read it.
+        # For demonstration, we just show placeholders.
+        st.code(full_code, language="python")
+
+    st.success("End of Documentation - Thanks for reading!")
+
