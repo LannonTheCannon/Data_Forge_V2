@@ -430,7 +430,7 @@ else:
     st.markdown("""
     **Overview**:
     1. **Dataset Overview**: A quick summary (head, describe, info, optional heatmap) to help users see the data structure.
-    2. **Assistant Chat**: A Mark Watney chatbot (with a custom avatar) that can retrieve data context from your vector store/Assistants API. 
+    2. **Assistant Chat**: An Assistant chatbot (with a custom avatar) that can retrieve data context from openai playground vector store/Assistants API. 
     3. **PandasAI Insights**: Uses `SmartDataframe` to generate Python code for data exploration, plus a GPT-4 Vision button for chart interpretation.
     4. **Code Editor**: Allows the user to review and modify the AI-generated code, then run it within Streamlit.
     5. **Documentation**: Shows the entire code with an explanation.
@@ -444,13 +444,4 @@ else:
     """)
 
     st.markdown("""---""")
-    st.write("**Full Source Code**:")
-    with st.expander("Click to Expand Full Code", expanded=False):
-        full_code = r'''<PASTE_THE_CODE_HERE>'''
-        # Instead of embedding your entire code as a variable,
-        # you can store it in a separate file or dynamically read it.
-        # For demonstration, we just show placeholders.
-        st.code(full_code, language="python")
-
-    st.success("End of Documentation - Thanks for reading!")
 
