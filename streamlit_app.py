@@ -14,17 +14,18 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import inspect
 
-# Enable Wide Mode
+from data import load_data
+
+# ---------------------------------------------
+# 1️⃣ Streamlit and OpenAI Setup
+# ---------------------------------------------
 st.set_page_config(layout="wide")
 
-# -----------------------
-# 🔹 OpenAI Setup
-# -----------------------
-client = openai.OpenAI(api_key=st.secrets['OPENAI_API_KEY'])
+client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-# -----------------------
-# 🔹 Global Session State
-# -----------------------
+# ---------------------------------------------
+# 2️⃣ Session State Initialization
+# ---------------------------------------------
 if "generated_code" not in st.session_state:
     st.session_state.generated_code = ""
 
@@ -32,31 +33,41 @@ if "editor_code" not in st.session_state:
     st.session_state.editor_code = ""
 
 if "chart_generated" not in st.session_state:
-    st.session_state.chart_generated = False  # Track if PandasAI created a chart
+    st.session_state.chart_generated = False
 
 if "chart_path" not in st.session_state:
     st.session_state.chart_path = ""
 
-# -----------------------
-# 🔹 Utility Functions
-# -----------------------
-def load_data():
-    """
-    Load your dataset here.
-    Replace this with your actual data-loading logic.
-    """
-    # Example: returning a simple random dataframe
-    data = {
-        "A": [1, 2, 3, 4, 5],
-        "B": [10, 20, 30, 40, 50],
-        "Fraud": [0, 1, 0, 1, 0]
-    }
-    return pd.DataFrame(data)
+if "pandasai_query" not in st.session_state:
+    st.session_state.pandasai_query = ""
+
+# ✅ Store the GPT-4 Vision response (chart interpretation)
+if "gpt4_vision_text" not in st.session_state:
+    st.session_state.gpt4_vision_text = None
+
+# ✅ Store the user-edited code's output
+if "user_code_result" not in st.session_state:
+    st.session_state.user_code_result = None
+
+
+# ---------------------------------------------
+# 3️⃣ Utility Functions
+# ---------------------------------------------
+# def load_data():
+#     """Load your dataset here (example data)."""
+#     data = {
+#         "A": [1, 2, 3, 4, 5],
+#         "B": [10, 20, 30, 40, 50],
+#         "Fraud": [0, 1, 0, 1, 0]
+#     }
+#     return pd.DataFrame(data)
+
 
 def encode_image(image_path):
     """Encodes an image to Base64 for OpenAI Vision API."""
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode("utf-8")
+
 
 def analyze_chart_with_openai(image_path):
     """Sends the generated chart to OpenAI GPT-4 Vision API and returns insights."""
@@ -66,7 +77,6 @@ def analyze_chart_with_openai(image_path):
 
         base64_image = encode_image(image_path)
 
-        # You may adjust the model name and prompt content as needed
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -99,135 +109,147 @@ def analyze_chart_with_openai(image_path):
     except Exception as e:
         return f"⚠️ Error analyzing chart: {e}"
 
-# -----------------------
-# 🔹 Callback Classes
-# -----------------------
+
+# ---------------------------------------------
+# 4️⃣ Callback Classes
+# ---------------------------------------------
 class StreamlitCallback(BaseCallback):
-    """
-    Callback to display AI-generated code in the left column.
-    """
-    def __init__(self, left_code_container, left_response_container) -> None:
-        self.left_code_container = left_code_container
-        self.left_response_container = left_response_container
+    """Displays AI-generated code."""
+
+    def __init__(self, code_container, response_container) -> None:
+        self.code_container = code_container
+        self.response_container = response_container
         self.generated_code = ""
 
     def on_code(self, response: str):
         """Displays AI-generated code"""
         self.generated_code = response
-        self.left_code_container.code(response, language="python")
+        self.code_container.code(response, language="python")
 
     def get_generated_code(self):
-        """Returns the last generated code"""
         return self.generated_code
 
+
 class StreamlitResponse(ResponseParser):
+    """Handles DataFrames, Plots, and Other outputs.
+       ❗️We do NOT display the chart inside this class to avoid double-loading.
     """
-    Custom response parser to handle DataFrames, Plots, and Other outputs.
-    Expects 'result["value"]' to be either a file path, a Matplotlib figure, or text.
-    """
+
     def __init__(self, context) -> None:
         super().__init__(context)
 
     def format_dataframe(self, result):
-        global left_response_container
-        left_response_container.dataframe(result["value"])
+        st.dataframe(result["value"])
         st.session_state.chart_generated = False
 
     def format_plot(self, result):
-        global left_response_container
+        """Save the chart to temp_chart.png, but don't display to avoid duplication."""
         chart_path = os.path.abspath("temp_chart.png")
 
-        # If result["value"] is a string (filepath)
         if isinstance(result["value"], str):
             existing_chart_path = os.path.abspath(result["value"])
             if existing_chart_path == chart_path:
-                # Already temp_chart.png
                 st.session_state.chart_generated = True
                 st.session_state.chart_path = chart_path
-                left_response_container.image(chart_path)
             else:
-                # It's a different file path
                 try:
                     shutil.copy(existing_chart_path, chart_path)
                     st.session_state.chart_generated = True
                     st.session_state.chart_path = chart_path
-                    left_response_container.image(chart_path)
                 except Exception as e:
                     st.error(f"⚠️ Error copying chart: {e}")
                     st.session_state.chart_generated = False
 
-        # If it's a Matplotlib figure
         elif isinstance(result["value"], plt.Figure):
             result["value"].savefig(chart_path)
             st.session_state.chart_generated = True
             st.session_state.chart_path = chart_path
-            left_response_container.image(chart_path)
-
         else:
             st.error("⚠️ Unexpected chart format returned.")
             st.session_state.chart_generated = False
 
     def format_other(self, result):
-        global left_response_container
-        left_response_container.markdown(f"### 📌 AI Insight\n\n{result['value']}")
+        st.markdown(f"### 📌 AI Insight\n\n{result['value']}")
         st.session_state.chart_generated = False
 
-# -----------------------
-# 🔹 Streamlit App Layout
-# -----------------------
-st.write("# Chat with Credit Card Fraud Dataset 🦙")
 
-# Load data
+# ---------------------------------------------
+# 5️⃣ Main App - Multi "Page" Navigation
+# ---------------------------------------------
+st.title("Chat with Credit Card Fraud Dataset 🦙")
+page = st.sidebar.radio("Select a Page", ["PandasAI Insights", "Code Editor"])
+
 df = load_data()
 
-with st.expander("🔎 Dataframe Preview"):
-    st.write(df.tail(3))
+# ==========================
+# PAGE 1: PandasAI Insights
+# ==========================
+if page == "PandasAI Insights":
+    st.subheader("PandasAI Analysis & GPT-4 Vision")
 
-query = st.text_area("🗣️ Ask a Data Analysis Question (Left Side AI):")
+    with st.expander("🔎 Dataframe Preview"):
+        st.dataframe(df.head(5))
 
-# Create two columns for layout
-left_column, right_column = st.columns([1, 1])
-
-# These containers will be used in the StreamlitCallback & StreamlitResponse
-left_code_container = left_column.empty()
-left_response_container = left_column.empty()
-
-# 🎯 1) Process the user query with PandasAI (Left Side)
-if query:
-    llm = PandasOpenAI(api_token=os.environ["OPENAI_API_KEY"])
-    callback_handler = StreamlitCallback(left_code_container, left_response_container)
-
-    query_engine = SmartDataframe(
-        df,
-        config={
-            "llm": llm,
-            "response_parser": StreamlitResponse,  # Pass the class, not instance
-            "callback": callback_handler,
-        },
+    # Let user enter a query
+    st.session_state.pandasai_query = st.text_area(
+        "🗣️ Ask a Data Analysis Question:",
+        value=st.session_state.pandasai_query
     )
 
-    answer = query_engine.chat(query)
+    # If user enters a query, run PandasAI
+    if st.session_state.pandasai_query:
+        # Create containers for code & response
+        code_container = st.container()
+        response_container = st.container()
 
-    generated_code = callback_handler.get_generated_code()
-    st.session_state.generated_code = generated_code
-    st.session_state.editor_code = generated_code
+        llm = PandasOpenAI(api_token=os.environ["OPENAI_API_KEY"])
+        callback_handler = StreamlitCallback(code_container, response_container)
 
-# 🎯 2) GPT-4 Vision Interpreter Button (Left Side)
-if st.session_state.chart_generated:
-    # Only show the button if a chart was created
-    gpt4_vision_button = left_column.button("🧐 GPT-4 Vision Interpreter (Left Side)")
+        query_engine = SmartDataframe(
+            df,
+            config={
+                "llm": llm,
+                "response_parser": StreamlitResponse,  # Class, not instance
+                "callback": callback_handler,
+            },
+        )
 
-    if gpt4_vision_button:
-        # Analyze the chart using GPT-4 Vision
-        ai_insight = analyze_chart_with_openai(st.session_state.chart_path)
-        left_response_container.markdown(f"### 📊 AI Chart Breakdown\n\n{ai_insight}")
+        answer = query_engine.chat(st.session_state.pandasai_query)
+
+        # Retrieve AI-generated code
+        generated_code = callback_handler.get_generated_code()
+        st.session_state.generated_code = generated_code
+        st.session_state.editor_code = generated_code
+
+    # ✅ If a chart has been generated, display it once.
+    if st.session_state.chart_generated:
+        st.image(st.session_state.chart_path, caption="Chart from PandasAI")
+
+        # If we already have GPT-4 text, show it
+        if st.session_state.gpt4_vision_text:
+            st.markdown(f"### 📊 AI Chart Breakdown (Saved)\n\n{st.session_state.gpt4_vision_text}")
+            # Button is now disabled since user already has the analysis
+            st.button("🧐 GPT-4 Vision Interpreter", disabled=True)
+        else:
+            # Show active GPT-4 Vision button
+            gpt4_vision_button = st.button("🧐 GPT-4 Vision Interpreter")
+            if gpt4_vision_button:
+                st.session_state.gpt4_vision_text = analyze_chart_with_openai(st.session_state.chart_path)
+                st.markdown(f"### 📊 AI Chart Breakdown\n\n{st.session_state.gpt4_vision_text}")
+    else:
+        st.button("🧐 GPT-4 Vision Interpreter", disabled=True)
+
+    if not st.session_state.generated_code and not st.session_state.chart_generated:
+        st.info("Enter a query above to generate a chart with PandasAI.")
+
+# ======================
+# PAGE 2: Code Editor
+# ======================
 else:
-    left_column.button("🧐 GPT-4 Vision Interpreter (Left Side)", disabled=True)
+    st.subheader("User Code Editor & Execution")
 
-# 🎯 3) Right Side: Editor + "Run Code" Button
-if st.session_state.generated_code:
-    with right_column:
-        # Editor
+    # Show the user code if we have it
+    if st.session_state.generated_code:
         edited_code = st_ace(
             value=st.session_state.editor_code,
             language="python",
@@ -237,28 +259,21 @@ if st.session_state.generated_code:
         )
         st.session_state.editor_code = edited_code
 
-        # Run Code Button
         col1, col2 = st.columns([3, 1])
         with col1:
-            st.write("")  # placeholder
+            st.write("")
         with col2:
             run_button = st.button("🚀 Run Code")
-
-        # Chart / Result Container Below Editor
-        right_chart_container = st.empty()
 
         if run_button:
             try:
                 exec_locals = {}
-
-                # Execute the edited code, providing common data modules
                 exec(
                     st.session_state.editor_code,
                     {"df": df, "pd": pd, "plt": plt, "st": st, "sns": sns},
                     exec_locals
                 )
 
-                # If the user code defines "analyze_data()", we can call it
                 if "analyze_data" in exec_locals:
                     analyze_func = exec_locals["analyze_data"]
                     params = inspect.signature(analyze_func).parameters
@@ -268,15 +283,21 @@ if st.session_state.generated_code:
                     else:
                         result = analyze_func([df])
 
-                    # Display the result in the right_chart_container
-                    if result["type"] == "plot":
-                        right_chart_container.image(result["value"])
-                    elif result["type"] == "dataframe":
-                        right_chart_container.dataframe(result["value"])
-                    elif result["type"] == "string":
-                        right_chart_container.markdown(f"### 📌 AI Insight\n\n{result['value']}")
-                    elif result["type"] == "number":
-                        right_chart_container.write(f"Result: {result['value']}")
+                    st.session_state.user_code_result = result
 
             except Exception as e:
                 st.error(f"⚠️ Error running the code: {e}")
+
+        # ✅ Show the user-code output if it exists
+        if st.session_state.user_code_result:
+            result = st.session_state.user_code_result
+            if result["type"] == "plot":
+                st.image(result["value"])
+            elif result["type"] == "dataframe":
+                st.dataframe(result["value"])
+            elif result["type"] == "string":
+                st.markdown(f"### 📌 AI Insight\n\n{result['value']}")
+            elif result["type"] == "number":
+                st.write(f"Result: {result['value']}")
+    else:
+        st.info("No generated code yet. Please go to 'PandasAI Insights' and enter a query first.")
