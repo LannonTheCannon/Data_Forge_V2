@@ -10,7 +10,7 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import inspect
-
+from data import load_data
 import streamlit as st
 from streamlit_ace import st_ace
 
@@ -63,18 +63,18 @@ if "user_code_result" not in st.session_state:
 # -----------------------------
 # 4) Data Loading (SQLite Example)
 # -----------------------------
-def load_data():
-    """
-    Load your fraud dataset from SQLite, returning a DataFrame.
-    Adjust if you have different table or row limits.
-    """
-    DB_FILE = "fraud_data.db"
-    if not os.path.exists(DB_FILE):
-        raise FileNotFoundError(f"Database file {DB_FILE} not found!")
-    conn = sqlite3.connect(DB_FILE)
-    df = pd.read_sql("SELECT * FROM fraud_data LIMIT 1000;", conn)
-    conn.close()
-    return df
+# def load_data():
+#     """
+#     Load your fraud dataset from SQLite, returning a DataFrame.
+#     Adjust if you have different table or row limits.
+#     """
+#     DB_FILE = "fraud_data.db"
+#     if not os.path.exists(DB_FILE):
+#         raise FileNotFoundError(f"Database file {DB_FILE} not found!")
+#     conn = sqlite3.connect(DB_FILE)
+#     df = pd.read_sql("SELECT * FROM fraud_data LIMIT 1000;", conn)
+#     conn.close()
+#     return df
 
 
 df = load_data()  # Load once at startup
@@ -174,7 +174,7 @@ def get_avatar(role):
 
 def display_chatbot():
     """Displays the Mark Watney Chatbot with persistent messages."""
-    st.title("Assistant RAG Chatbot with CC Fraud Information (1000)")
+    st.title("Assistant RAG Chatbot with CC Fraud Information (10000 Sample)")
 
     for message in st.session_state.messages:
         with st.chat_message(message["role"], avatar=get_avatar(message["role"])):
