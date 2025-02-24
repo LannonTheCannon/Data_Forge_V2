@@ -46,7 +46,7 @@ GPT-4 Vision API (Image interpretation for visual insights)
 
 1️⃣ Clone the Repository
 
-[git clone https://github.com/your-repo/fraud-detection-dashboard.git](https://github.com/LannonTheCannon/Data_Forge_V2.git)
+https://github.com/LannonTheCannon/Data_Forge_V2.git
 
 2️⃣ Install Dependencies
 
