@@ -319,6 +319,8 @@ elif page == "PandasAI Insights":
         - **Plot a line or scatter chart comparing fraud ratio to CUSTOMER_ID_AVG_AMOUNT_30DAY_WINDOW binned into intervals. Does higher average spend lead to a higher or lower fraud ratio?**
         """)
 
+    st.info("Please refresh the page for each new query")
+
     st.markdown('<p class="section-header">Ask a Data Analysis Question</p>', unsafe_allow_html=True)
     st.session_state.pandasai_query = st.text_area(
         "Enter your analysis question here:",
