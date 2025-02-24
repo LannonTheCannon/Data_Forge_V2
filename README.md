@@ -56,7 +56,6 @@ pip install -r requirements.txt
 
 Create a .streamlit/secrets.toml file and add:
 
-[secrets]
 OPENAI_API_KEY = "openai-api-key"
 
 4️⃣ Run the Application
