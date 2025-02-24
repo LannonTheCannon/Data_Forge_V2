@@ -2,7 +2,7 @@ import json
 import sqlite3
 import pandas as pd
 
-DB_FILE = "fraud_data.db"
+DB_FILE = "../fraud_data.db"
 conn = sqlite3.connect(DB_FILE)
 df = pd.read_sql("SELECT * FROM fraud_data LIMIT 1000;", conn)
 conn.close()

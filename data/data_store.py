@@ -5,7 +5,7 @@ from pathlib import Path
 
 # This file only needs to be run once in order to gather all of that data
 
-DB_FILE = "fraud_data.db"
+DB_FILE = "../fraud_data.db"
 
 def load_file(path: str) -> pd.DataFrame:
     """

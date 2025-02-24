@@ -51,7 +51,7 @@ def encode_image(image_path):
 
 
 # Path to your image
-image_path = "temp_chart.png"
+image_path = "../temp_chart.png"
 
 # Getting the Base64 string
 base64_image = encode_image(image_path)

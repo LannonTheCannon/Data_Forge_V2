@@ -1,7 +1,7 @@
 import sqlite3
 import pandas as pd
 
-DB_FILE = "fraud_data.db"
+DB_FILE = "../fraud_data.db"
 TABLE_NAME = "fraud_data"
 OUTPUT_TXT = "fraud_data.txt"
 LIMIT = 1000
