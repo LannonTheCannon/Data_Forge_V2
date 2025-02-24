@@ -313,6 +313,20 @@ elif page == "PandasAI Insights":
     with st.expander("🔎 Dataframe Preview"):
         st.dataframe(df.head(5))
 
+    # 🏆 Sample Visualization Questions Expander
+    with st.expander("Sample Visualization Questions"):
+        st.markdown("""
+        - **Can you create a violin plot to show the variance in transaction amounts for fraud vs. non-fraud?**
+        - **Plot a scatter chart of transaction amount vs. user account age, colored by fraud label.**
+        - **Show a boxplot of transaction amounts grouped by transaction category (e.g., merchant type), highlighting fraud vs. non-fraud.**
+        - **Create a line or bar chart showing how many fraudulent transactions occur by hour of the day, and compare it to non-fraudulent transactions. (Use TX_DURING_NIGHT or TX_DATETIME.)**
+        - **Plot a scatter or box plot comparing TX_AMOUNT to CUSTOMER_ID_NB_TX_7DAY_WINDOW, colored by TX_FRAUD. Does high 7-day transaction frequency correlate with fraud?**
+        - **Create a joint or pair plot of CUSTOMER_ID_AVG_AMOUNT_30DAY_WINDOW and TERMINAL_ID_RISK_30DAY_WINDOW to see if there’s a pattern in fraud transactions.**
+        - **Plot a histogram or bar chart of CUSTOMER_ID_NB_TX_30DAY_WINDOW for TX_FRAUD=1 vs. TX_FRAUD=0. Is there a user frequency range that stands out for fraud?**
+        - **Use a heatmap or pair plot to see if TX_AMOUNT correlates with TERMINAL_ID_RISK_1DAY_WINDOW, TERMINAL_ID_RISK_7DAY_WINDOW, and TERMINAL_ID_RISK_30DAY_WINDOW.**
+        - **Plot a line or scatter chart comparing fraud ratio to CUSTOMER_ID_AVG_AMOUNT_30DAY_WINDOW binned into intervals. Does higher average spend lead to a higher or lower fraud ratio?**
+        """)
+
     # Query for PandasAI
     st.session_state.pandasai_query = st.text_area(
         "🗣️ Ask a Data Analysis Question:",
