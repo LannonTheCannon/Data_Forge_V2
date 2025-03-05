@@ -274,7 +274,7 @@ if page == "Dataset Overview":
     st.image("./images/fraud.png", width=300,
              caption="The world of digital transactions")
 
-    st.markdown('<h2 class="big-title">Dataset Overview</h1>', unsafe_allow_html=True)
+    st.markdown('<h2 class="big-title">Dataset Overview</h2>', unsafe_allow_html=True)
     st.write("### Data Preview")
     st.dataframe(df.head(5))
 
