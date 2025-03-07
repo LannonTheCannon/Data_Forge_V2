@@ -29,7 +29,7 @@ st.markdown("""
 <style>
 /* Hide Streamlit default hamburger and footer */
 #MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
+/*footer {visibility: hidden;}*/
 
 /* Customize the sidebar */
 [data-testid="stSidebar"] {
@@ -262,6 +262,7 @@ PAGE_OPTIONS = [
     "Code Editor",
     "Documentation"
 ]
+
 page = st.sidebar.radio("Select a Page", PAGE_OPTIONS)
 
 # -----------------------------------------------------
@@ -283,7 +284,6 @@ if page == "Dataset Overview":
 
     buffer = io.StringIO()
     df.info(buf=buffer)
-    info_str = buffer.getvalue()
     info_str = buffer.getvalue()
 
     st.markdown('<p class="section-header">Dataset Info (df.info())</p>', unsafe_allow_html=True)
