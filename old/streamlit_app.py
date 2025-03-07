@@ -226,7 +226,7 @@ class StreamlitResponse(ResponseParser):
         st.session_state.chart_generated = False
 
     def format_plot(self, result):
-        chart_path = os.path.abspath("temp_chart.png")
+        chart_path = os.path.abspath("../temp_chart.png")
         if isinstance(result["value"], str):
             existing_chart_path = os.path.abspath(result["value"])
             if existing_chart_path == chart_path:
