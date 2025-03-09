@@ -1,7 +1,7 @@
 import sqlite3
-import pickle
 import pandas as pd
 from pathlib import Path
+import fickling
 
 # This file only needs to be run once in order to gather all of that data
 
@@ -12,7 +12,7 @@ def load_file(path: str) -> pd.DataFrame:
     loads data from pkl files
     """
     with open(path, "rb") as f:
-        return pickle.load(f)
+        return fickling.load(f)
 
 
 def save_to_sqlite(folder: str, db_file: str = DB_FILE):
