@@ -1,3 +1,4 @@
+@ -1,442 +1,442 @@
 import os
 import time
 import base64
@@ -29,7 +30,7 @@ st.markdown("""
 <style>
 /* Hide Streamlit default hamburger and footer */
 #MainMenu {visibility: hidden;}
-/*footer {visibility: hidden;}*/
+footer {visibility: hidden;}
 
 /* Customize the sidebar */
 [data-testid="stSidebar"] {
@@ -262,7 +263,6 @@ PAGE_OPTIONS = [
     "Code Editor",
     "Documentation"
 ]
-
 page = st.sidebar.radio("Select a Page", PAGE_OPTIONS)
 
 # -----------------------------------------------------
@@ -275,7 +275,7 @@ if page == "Dataset Overview":
     st.image("./images/fraud.png", width=300,
              caption="The world of digital transactions")
 
-    st.markdown('<h2 class="big-title">Dataset Overview</h2>', unsafe_allow_html=True)
+    st.markdown('<h2 class="big-title">Dataset Overview</h1>', unsafe_allow_html=True)
     st.write("### Data Preview")
     st.dataframe(df.head(5))
 
@@ -284,6 +284,7 @@ if page == "Dataset Overview":
 
     buffer = io.StringIO()
     df.info(buf=buffer)
+    info_str = buffer.getvalue()
     info_str = buffer.getvalue()
 
     st.markdown('<p class="section-header">Dataset Info (df.info())</p>', unsafe_allow_html=True)
@@ -319,6 +320,7 @@ elif page == "PandasAI Insights":
         - **Plot a line or scatter chart comparing fraud ratio to CUSTOMER_ID_AVG_AMOUNT_30DAY_WINDOW binned into intervals. Does higher average spend lead to a higher or lower fraud ratio?**
         """)
 
+    st.info("Please refresh the page for each new query")
     st.info("Please refresh the page for each new query.")
 
     st.markdown('<p class="section-header">Ask a Data Analysis Question</p>', unsafe_allow_html=True)
