@@ -1,11 +1,9 @@
 streamlit
 pandas==1.5.3
 numpy==1.23.5
-pandasai==2.0
+pandasai==2.4.2
 openai
 gdown
 seaborn
 scikit-learn
 streamlit-ace
-pyyaml
-polars
