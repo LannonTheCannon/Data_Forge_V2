@@ -102,7 +102,9 @@ df = load_data()
 # ------------------------------
 def encode_image(image_path):
     with open(image_path, "rb") as image_file:
-        return base64.b64encode(image_file.read()).decode("utf-8")
+        encoded_str = base64.b64encode(image_file.read()).decode("utf-8")
+        print("Base64 Image Length: ", len(encoded_str))
+        return encoded_str
 
 # ------------------------------
 # 3) GPT-4 Vision Analysis
@@ -112,6 +114,8 @@ def analyze_chart_with_openai(image_path, user_request, assistant_summary, code)
         return "⚠️ No chart found."
 
     base64_image = encode_image(image_path)
+
+    uploaded_image_url = f'file://{image_path}'
 
     combined_prompt = f"""
 You are an expert data analyst with additional chart context.
@@ -139,16 +143,21 @@ Avoid making assumptions beyond what the data or chart shows.
         response = openai.chat.completions.create(
             model="gpt-4.5-preview",   # or "gpt-4" if you have access
             messages=[
-                {"role": "system", "content": "You are a helpful data analysis assistant."},
-                {
+                {"role": "system", "content": """"✅ 
+    **Explicitly defines what 0 and 1 mean** → No assumptions.  
+✅ **Forces a per-category breakdown** → Prevents misgrouping.  
+✅ **Uses generated code and dataset query as extra context** → Aligns with PandasAI’s output.  
+✅ **Includes clear analysis steps** → Guides GPT-4 to focus on key aspects."}
+"""},
+            {
                     "role": "user",
-                    "content": f"{combined_prompt}\n"
-                               f"Below is the chart in base64:\n"
-                               f"[Chart base64: {base64_image} ]\n\n"
-                               "You do not have direct image parsing, but imagine you can see the chart."
+                    "content": [
+                        {"type": "text", "text": f"{combined_prompt}\n\nNow, analyze the attached image."},
+                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{base64_image}"}}
+                    ],
                 }
             ],
-            max_tokens=500,
+            max_tokens=750,
             temperature=0.3,
         )
         # Extract the chat response
@@ -234,90 +243,99 @@ class StreamlitResponse(ResponseParser):
 # ------------------------------
 # MAIN PAGE: Integrated Example
 # ------------------------------
-st.title("Advanced PandasAI + Vision GPT-4 Workflow")
-st.write("Enter a question to generate a chart, then interpret it with extra context.")
 
-user_query = st.text_input("Enter your question (e.g., 'Plot a scatter chart of transaction_amount vs. customer_age, colored by fraud_label')")
+if __name__ == "__main__":
 
-if user_query:
-    st.session_state.user_query = user_query  # store original user request
+    st.title("Advanced PandasAI + Vision GPT-4 Workflow")
+    st.write("Enter a question to generate a chart, then interpret it with extra context.")
 
-    # 1) Have the assistant interpret the query
-    with st.spinner("Assistant interpreting your request..."):
-        interpretation = get_assistant_interpretation(user_query)
-        st.session_state.assistant_interpretation = interpretation
+    user_query = st.text_input("Enter your question (e.g., 'Plot a scatter chart of transaction_amount vs. customer_age, colored by fraud_label')")
 
-    st.subheader("Assistant Interpretation")
-    st.write(interpretation)
+    if user_query:
+        st.session_state.user_query = user_query  # store original user request
 
-    # 2) Build prompt for PandasAI
-    # We can combine user_query + interpretation,
-    # but you said you want to keep the user’s request mostly the same.
-    # We'll do something simple like:
-    combined_prompt = f"""
-User wants the following analysis (summarized):
-{interpretation}
+        # 1) Have the assistant interpret the query
+        with st.spinner("Assistant interpreting your request..."):
+            interpretation = get_assistant_interpretation(user_query)
+            st.session_state.assistant_interpretation = interpretation
 
-Now please create a plot or data analysis responding to the user request:
-{user_query}
-"""
+        st.subheader("Assistant Interpretation")
+        st.write(interpretation)
 
-    # 3) Call PandasAI
-    st.subheader("PandasAI Generating Chart Code")
-    code_callback = StreamlitCallback()
-    #response_parser = StreamlitResponse()
-    code_callback = StreamlitCallback()
+        # 2) Build prompt for PandasAI
+        # We can combine user_query + interpretation,
+        # but you said you want to keep the user’s request mostly the same.
+        # We'll do something simple like:
 
-    llm = PandasOpenAI(api_token=st.secrets["OPENAI_API_KEY"])  # or a different LLM if desired
-    sdf = SmartDataframe(
-        df,
-        config={
-            "llm": llm,
-            "callback": code_callback,
-            "response_parser": StreamlitResponse,
-        },
-    )
+        combined_prompt = f"""
+    User wants the following analysis (summarized):
+    {interpretation}
+    
+    Now please create a plot or data analysis responding to the user request:
+    {user_query}
+    """
 
-    with st.spinner("Generating chart..."):
-        answer = sdf.chat(combined_prompt)
+        # 3) Call PandasAI
+        st.subheader("PandasAI Generating Chart Code")
+
+        code_callback = StreamlitCallback()
+
+        #response_parser = StreamlitResponse()
+
+        code_callback = StreamlitCallback()
+
+        llm = PandasOpenAI(api_token=st.secrets["OPENAI_API_KEY"])  # or a different LLM if desired
+
+        sdf = SmartDataframe(
+            df,
+            config={
+                "llm": llm,
+                "callback": code_callback,
+                "response_parser": StreamlitResponse,
+            },
+        )
+
+        with st.spinner("Generating chart..."):
+            answer = sdf.chat(combined_prompt)
 
 
-    # 4) Grab the generated code
-    st.session_state.pandas_code = code_callback.get_generated_code()
+        # 4) Grab the generated code
+        st.session_state.pandas_code = code_callback.get_generated_code()
 
-    st.subheader("AI Response / Explanation")
-    st.write(answer)
+        st.subheader("AI Response / Explanation")
+        st.write(answer)
 
-    # 7) Retrieve & show the generated code
-    code = code_callback.get_generated_code()
-    if code:
-        st.markdown("### Generated Code:")
-        st.code(code, language="python")
+        # 7) Retrieve & show the generated code
+        code = code_callback.get_generated_code()
 
-    # 5) If a chart got created, show it
+        if code:
+            st.markdown("### Generated Code:")
+            st.code(code, language="python")
+
+        # 5) If a chart got created, show it
+        if st.session_state.chart_path and os.path.exists(st.session_state.chart_path):
+            st.image(st.session_state.chart_path, caption="Chart from PandasAI")
+        else:
+            st.info("No chart was generated or it couldn't be saved.")
+
+    # ----------------------------------
+    # GPT-4 Vision Interpretation Button
+    # ----------------------------------
     if st.session_state.chart_path and os.path.exists(st.session_state.chart_path):
-        st.image(st.session_state.chart_path, caption="Chart from PandasAI")
+        st.markdown("---")
+        st.write("### Final Step: GPT-4 Vision Interpretation")
+        if st.button("Analyze This Chart with Extra Context"):
+            with st.spinner("Analyzing chart..."):
+                result = analyze_chart_with_openai(
+                    image_path=st.session_state.chart_path,
+                    user_request=st.session_state.user_query,
+                    assistant_summary=st.session_state.assistant_interpretation,
+                    code=st.session_state.pandas_code,
+                )
+                st.session_state.vision_result = result
+
+        if st.session_state.vision_result:
+            st.write("**GPT-4 Vision Analysis**:")
+            st.markdown(st.session_state.vision_result)
     else:
-        st.info("No chart was generated or it couldn't be saved.")
-
-# ----------------------------------
-# GPT-4 Vision Interpretation Button
-# ----------------------------------
-if st.session_state.chart_path and os.path.exists(st.session_state.chart_path):
-    st.markdown("---")
-    st.write("### Final Step: GPT-4 Vision Interpretation")
-    if st.button("Analyze This Chart with Extra Context"):
-        with st.spinner("Analyzing chart..."):
-            result = analyze_chart_with_openai(
-                image_path=st.session_state.chart_path,
-                user_request=st.session_state.user_query,
-                assistant_summary=st.session_state.assistant_interpretation,
-                code=st.session_state.pandas_code,
-            )
-            st.session_state.vision_result = result
-
-    if st.session_state.vision_result:
-        st.write("**GPT-4 Vision Analysis**:")
-        st.markdown(st.session_state.vision_result)
-else:
-    st.write("*(No chart to interpret yet.)*")
+        st.write("*(No chart to interpret yet.)*")
