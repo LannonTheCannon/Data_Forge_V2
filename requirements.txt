@@ -7,4 +7,4 @@ gdown
 seaborn
 scikit-learn
 streamlit-ace
-yaml
+pyyaml
