@@ -8,7 +8,7 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import streamlit as st
-
+from data import load_data
 # ------------------------------
 # PandasAI + Callbacks
 # ------------------------------
@@ -84,16 +84,16 @@ if "vision_result" not in st.session_state:
 # ------------------------------
 # 1) Load Some Example Data
 # ------------------------------
-@st.cache_data
-def load_data():
-    # For demonstration, let's create a small random dataset
-    import numpy as np
-    df_example = pd.DataFrame({
-        "transaction_amount": np.random.exponential(scale=100, size=1000),
-        "fraud_label": np.random.choice([0,1], size=1000, p=[0.95, 0.05]),
-        "customer_age": np.random.randint(18, 80, size=1000),
-    })
-    return df_example
+# @st.cache_data
+# def load_data():
+#     # For demonstration, let's create a small random dataset
+#     import numpy as np
+#     df_example = pd.DataFrame({
+#         "transaction_amount": np.random.exponential(scale=100, size=1000),
+#         "fraud_label": np.random.choice([0,1], size=1000, p=[0.95, 0.05]),
+#         "customer_age": np.random.randint(18, 80, size=1000),
+#     })
+#     return df_example
 
 df = load_data()
 
