@@ -139,7 +139,7 @@ Avoid making assumptions beyond what the data or chart shows.
 """
 
     try:
-        # Use chat.completions (because "gpt-3.5-turbo" is a chat model)
+
         response = openai.chat.completions.create(
             model="gpt-4.5-preview",   # or "gpt-4" if you have access
             messages=[
