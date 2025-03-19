@@ -9,6 +9,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import streamlit as st
 # from data import load_data
+from resources.documentation_page_1 import documentation_page
 # ------------------------------
 # PandasAI + Callbacks
 # ------------------------------
@@ -78,7 +79,6 @@ if "assistant_interpretation" not in st.session_state:
     st.session_state["assistant_interpretation"] = None
 if "user_query" not in st.session_state:
     st.session_state['user_query'] = ""
-
 if "vision_result" not in st.session_state:
     st.session_state.vision_result = None
 if 'df' not in st.session_state:
@@ -89,6 +89,8 @@ if "df_summary" not in st.session_state:
     st.session_state.df_summary = None
 if "question_list" not in st.session_state:
     st.session_state['question_list'] = []
+if "metadata_string" not in st.session_state:
+    st.session_state['metadata_string'] = ""
 
 # ------------------------------
 # 1) Load Some Example Data
@@ -105,6 +107,7 @@ if "question_list" not in st.session_state:
 #     return df_example
 
 # Function to load the dataset
+
 def load_data(uploaded_file):
     if uploaded_file is not None:
         df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
@@ -125,16 +128,19 @@ def encode_image(image_path):
 # ------------------------------
 # 3) GPT-4 Vision Analysis
 # ------------------------------
-def analyze_chart_with_openai(image_path, user_request, assistant_summary, code):
+def analyze_chart_with_openai(image_path, user_request, assistant_summary, code, meta):
     if not os.path.exists(image_path):
         return "⚠️ No chart found."
 
     base64_image = encode_image(image_path)
-
     uploaded_image_url = f'file://{image_path}'
 
-    combined_prompt = f"""
-You are an expert data analyst with additional chart context.
+#4) Provide next steps or insights.
+
+    combined_prompt = f"""    
+You are an expert data analyst with additional chart context and metadata based on the actual dataset provided
+"{meta}"
+
 Here is the user’s original request:
 "{user_request}"
 
@@ -143,20 +149,20 @@ Assistant summarized the request as:
 
 PandasAI generated this chart code:
 (This code shows how the data was plotted, including x/y columns, grouping, etc.)
+{code}
 
 Now you have the final chart attached as an image.
 Please provide a thorough interpretation of this chart:
 1) Describe the chart type and axes.
 2) Identify any trends, peaks, or patterns.
-3) Tie it back to the user’s request about fraud detection or other relevant context.
-4) Provide next steps or insights.
+3) Tie it back to the user’s request.
 
 Avoid making assumptions beyond what the data or chart shows.
 """
     try:
 
         response = openai.chat.completions.create(
-            model="gpt-4.5-preview",   # or "gpt-4" if you have access
+            model="gpt-4o-mini",   # or "gpt-4" if you have access
             messages=[
                 {"role": "system", "content": """"✅ 
     **Explicitly defines what 0 and 1 mean** → No assumptions.  
@@ -179,6 +185,50 @@ Avoid making assumptions beyond what the data or chart shows.
         return response.choices[0].message.content
     except Exception as e:
         return f"Error calling GPT-4 Vision endpoint: {e}"
+
+def generate_multiple_question_sets():
+    question_set_1 = get_list_questions()
+    question_set_2 = get_list_questions()
+    question_set_3 = get_list_questions()
+
+    return question_set_1, question_set_2, question_set_3
+
+
+def identify_common_questions(question_set_1, question_set_2, question_set_3):
+    """Uses AI to analyze the three sets and identify the most common questions."""
+    messages = [
+        {"role": "system", "content": f"""You are an expert data analyst assistant. Your task is to identify the most relevant and commonly occurring questions from three generated question sets.
+
+- Find the **most frequent** or **semantically similar** questions across the three sets.
+- Ensure a **balanced mix** of insights (time trends, correlations, distributions, categorical comparisons).
+- Avoid redundancy while keeping the most valuable questions.
+
+Here are the three sets of generated questions:
+Set 1:
+{question_set_1}
+
+Set 2:
+{question_set_2}
+
+Set 3:
+{question_set_3}
+
+Identify the **top 5 most relevant** questions based on frequency and analytical value."""},
+        {"role": "user",
+         "content": f"Here are the question sets:\n\nSet 1: {question_set_1}\nSet 2: {question_set_2}\nSet 3: {question_set_3}\n\nPlease provide the 5 most common and relevant questions."}
+    ]
+
+    try:
+        response = openai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            max_tokens=800
+        )
+        common_questions = response.choices[0].message.content.strip().split("\n")
+        return [q.strip() for q in common_questions if q.strip()]
+
+    except Exception as e:
+        return [f"Error identifying common questions: {str(e)}"]
 
 
 def get_list_questions():
@@ -214,7 +264,7 @@ Generate 5 structured questions that align with best practices in data analysis 
 
     try:
         response = openai.chat.completions.create(
-            model="gpt-4-turbo",
+            model="gpt-4o-mini",
             messages=messages,
             max_tokens=800
         )
@@ -222,25 +272,31 @@ Generate 5 structured questions that align with best practices in data analysis 
         # return response.choices[0].message.content
         questions = response.choices[0].message.content.strip().split("\n")
 
-        return [q.strip() for q in questions if q.strip()]
+        return (metadata_string, [q.strip() for q in questions if q.strip()])
 
     except Exception as e:
         return [f"Error generating questions: {str(e)}"]
 
-
 # ------------------------------
 # 4) RAG Assistant Interpretation
 # ------------------------------
-def get_assistant_interpretation(user_input):
-    """
-    Summarizes the user's request, focusing on what the user wants to see or analyze.
-    """
+def get_assistant_interpretation(user_input, metadata):
     prompt = f"""
-Summarize the user's request from the following text without altering its core meaning.
-Focus on what the user wants to see or analyze in the data:
----
-{user_input}
----
+*Reinterpret the user’s request into a clear, visualization-ready question that aligns with the dataset’s 
+structure and is optimized for charting. Focus on extracting the core analytical intent, ensuring the output 
+is compatible with PandasAI’s ability to generate meaningful graphs.
+
+Here is the user's original query: {user_input}
+Here is the dataset metadata "{metadata}"
+
+Abstract away ambiguity—Do not take the request too literally. Instead, refine it to emphasize patterns, trends, 
+distributions, or comparisons that can be effectively represented visually.
+Ensure clarity for PandasAI—Frame the question in a way that translates naturally into a visualization rather 
+than a direct data lookup or overly complex query.
+Align with the dataset’s metadata—Use insights from the metadata to guide the interpretation, ensuring that the 
+suggested visualization is relevant to the data type (e.g., time series trends, categorical distributions, correlations).
+Prioritize chart compatibility—Reframe vague or broad queries into specific, actionable visual analysis 
+that can be represented using line charts, bar graphs, scatter plots, or heatmaps.*
 """
 
     try:
@@ -310,7 +366,8 @@ class StreamlitResponse(ResponseParser):
 
 PAGE_OPTIONS = [
     'Data Upload',
-    'Pandas Chat'
+    'Pandas Chat',
+    'Documentation'
 ]
 
 page = st.sidebar.radio('Select a Page', PAGE_OPTIONS)
@@ -337,8 +394,6 @@ if __name__ == "__main__":
             st.write("### Data Summary")
             st.write(st.session_state.df_summary)
 
-
-
     elif page == 'Pandas Chat':
 
         st.title("Advanced PandasAI + Vision GPT-4 Workflow")
@@ -347,12 +402,28 @@ if __name__ == "__main__":
         # 🚀 New Feature: Suggested Questions
         st.write("### Suggested Questions")
 
-        if "question_list" not in st.session_state or not st.session_state["question_list"]:
-            st.session_state["question_list"] = get_list_questions()  # Only generate once
+        # if "question_list" not in st.session_state or not st.session_state["question_list"]:
+        #     st.session_state['metadata_string'], st.session_state["question_list"] = get_list_questions()  # Only generate once
+        #
+        # for idx, question in enumerate(st.session_state["question_list"]):
+        #     st.session_state["selected_question"] = question
+        #     st.write(question)
 
+        # ---- Streamlit Integration ---- #
+        if "question_list" not in st.session_state:
+            st.session_state["question_list"] = []
+
+        if st.button("Generate Most Relevant Questions"):
+            st.write("Generating multiple question sets...")
+
+            question_set_1, question_set_2, question_set_3 = generate_multiple_question_sets()
+            common_questions = identify_common_questions(question_set_1, question_set_2, question_set_3)
+
+            st.session_state["question_list"] = common_questions
+
+        st.write("### Most Relevant Questions:")
         for idx, question in enumerate(st.session_state["question_list"]):
-            st.session_state["selected_question"] = question
-            st.write(question)
+            st.write(f"{question}")
 
         user_query = st.text_input(
             "Enter your question:",
@@ -366,7 +437,7 @@ if __name__ == "__main__":
             if "assistant_interpretation" not in st.session_state or st.session_state[
                 "assistant_interpretation"] is None:
                 with st.spinner("Assistant interpreting your request..."):
-                    interpretation = get_assistant_interpretation(user_query)
+                    interpretation = get_assistant_interpretation(user_query, st.session_state['metadata_string'])
                     st.session_state["assistant_interpretation"] = interpretation  # Store in session state
             else:
                 interpretation = st.session_state["assistant_interpretation"]  # Use existing interpretation
@@ -392,8 +463,6 @@ if __name__ == "__main__":
             code_callback = StreamlitCallback()
 
             #response_parser = StreamlitResponse()
-
-            code_callback = StreamlitCallback()
 
             llm = PandasOpenAI(api_token=st.secrets["OPENAI_API_KEY"])  # or a different LLM if desired
 
@@ -442,6 +511,7 @@ if __name__ == "__main__":
                         user_request=st.session_state.user_query,
                         assistant_summary=st.session_state.assistant_interpretation,
                         code=st.session_state.pandas_code,
+                        meta=st.session_state.metadata_string,
                     )
                     st.session_state.vision_result = result
 
@@ -450,3 +520,6 @@ if __name__ == "__main__":
                 st.markdown(st.session_state.vision_result)
         else:
             st.write("*(No chart to interpret yet.)*")
+
+    elif page == 'Documentation':
+        documentation_page()
