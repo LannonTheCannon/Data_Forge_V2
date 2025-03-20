@@ -457,17 +457,16 @@ if __name__ == "__main__":
             value=st.session_state.get("user_query", "")
         )
 
-        if new_user_query != st.session_state['user_query']: # if a new query is entered
+        if new_user_query != st.session_state['user_query']:  # if a new query is entered
             reset_session_variables()
             st.session_state['user_query'] = new_user_query
-            st.session_state["trigger_assistant"] = True
-        # if user_query:
-        #     st.session_state["user_query"] = user_query  # Store updated query
 
-            # # Only generate interpretation if it doesn't already exist
-            # if "assistant_interpretation" not in st.session_state or st.session_state[
-            #     "assistant_interpretation"] is None:
-        if st.session_state.get("trigger_assistant", False):
+        if st.button('generate interpretation'):
+            st.session_state["trigger_assistant"] = True
+
+        # if st.session_state['trigger_assistant']:
+
+        if st.session_state['trigger_assistant']:
             with st.spinner("Assistant interpreting your request..."):
                 interpretation = get_assistant_interpretation(new_user_query, st.session_state['metadata_string'])
                 st.session_state["assistant_interpretation"] = interpretation  # Store in session state
@@ -475,7 +474,7 @@ if __name__ == "__main__":
         else:
             interpretation = st.session_state["assistant_interpretation"]  # Use existing interpretation
 
-        if st.session_state.get("assistant_interpretation"):
+        if st.session_state.get('assistant_interpretation'):
             st.subheader("Assistant Interpretation")
             st.write(interpretation)
 
