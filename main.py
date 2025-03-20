@@ -91,6 +91,9 @@ if "question_list" not in st.session_state:
     st.session_state['question_list'] = []
 if "metadata_string" not in st.session_state:
     st.session_state['metadata_string'] = ""
+if "trigger_assistant" not in st.session_state:
+    st.session_state["trigger_assistant"] = False  # Ensures assistant runs when needed
+
 
 # ------------------------------
 # 1) Load Some Example Data
@@ -105,6 +108,16 @@ if "metadata_string" not in st.session_state:
 #         "customer_age": np.random.randint(18, 80, size=1000),
 #     })
 #     return df_example
+
+def reset_session_variables():
+    # reset session state variables
+
+    st.session_state["assistant_interpretation"] = None
+    st.session_state["pandas_code"] = None
+    st.session_state["chart_path"] = None
+    st.session_state["vision_result"] = None
+    st.session_state["user_query"] = ""  # Clear the input field as well
+    st.session_state["trigger_assistant"] = False
 
 # Function to load the dataset
 
@@ -230,7 +243,6 @@ Identify the **top 5 most relevant** questions based on frequency and analytical
     except Exception as e:
         return [f"Error identifying common questions: {str(e)}"]
 
-
 def get_list_questions():
     """ Generate a list of questions based on the uploaded dataset """
     # Ensure we have metadata before proceeding
@@ -311,7 +323,9 @@ that can be represented using line charts, bar graphs, scatter plots, or heatmap
             temperature=0.3,
         )
         summary = response.choices[0].message.content
+
         return summary
+
     except Exception as e:
         st.warning(f"Error in get_assistant_interpretation: {e}")
         return "Could not interpret user request."
@@ -420,41 +434,57 @@ if __name__ == "__main__":
             common_questions = identify_common_questions(question_set_1, question_set_2, question_set_3)
 
             st.session_state["question_list"] = common_questions
+            print(st.session_state['question_list'])
 
         st.write("### Most Relevant Questions:")
         for idx, question in enumerate(st.session_state["question_list"]):
-            st.write(f"{question}")
+            # Okay at this point we need to do some list/ string manipulation
+            if (question[0]) in ['1','2','3','4','5']:
+                if st.button(f" 🔍 {question}"):
+                    reset_session_variables()
+                    st.session_state["user_query"] = question
+                    st.session_state["trigger_assistant"] = True  # Ensure assistant runs
+            else:
+                st.write(f"{question}")
 
-        user_query = st.text_input(
+        # user_query = st.text_input(
+        #     "Enter your question:",
+        #     value=st.session_state.get("user_query", "")
+        # )
+
+        new_user_query = st.text_input(
             "Enter your question:",
             value=st.session_state.get("user_query", "")
         )
 
-        if user_query:
-            st.session_state["user_query"] = user_query  # Store updated query
+        if new_user_query != st.session_state['user_query']: # if a new query is entered
+            reset_session_variables()
+            st.session_state['user_query'] = new_user_query
+            st.session_state["trigger_assistant"] = True
+        # if user_query:
+        #     st.session_state["user_query"] = user_query  # Store updated query
 
-            # Only generate interpretation if it doesn't already exist
-            if "assistant_interpretation" not in st.session_state or st.session_state[
-                "assistant_interpretation"] is None:
-                with st.spinner("Assistant interpreting your request..."):
-                    interpretation = get_assistant_interpretation(user_query, st.session_state['metadata_string'])
-                    st.session_state["assistant_interpretation"] = interpretation  # Store in session state
-            else:
-                interpretation = st.session_state["assistant_interpretation"]  # Use existing interpretation
+            # # Only generate interpretation if it doesn't already exist
+            # if "assistant_interpretation" not in st.session_state or st.session_state[
+            #     "assistant_interpretation"] is None:
+        if st.session_state.get("trigger_assistant", False):
+            with st.spinner("Assistant interpreting your request..."):
+                interpretation = get_assistant_interpretation(new_user_query, st.session_state['metadata_string'])
+                st.session_state["assistant_interpretation"] = interpretation  # Store in session state
+                st.session_state["trigger_assistant"] = False
+        else:
+            interpretation = st.session_state["assistant_interpretation"]  # Use existing interpretation
 
+        if st.session_state.get("assistant_interpretation"):
             st.subheader("Assistant Interpretation")
             st.write(interpretation)
-            # 2) Build prompt for PandasAI
-            # We can combine user_query + interpretation,
-            # but you said you want to keep the user’s request mostly the same.
-            # We'll do something simple like:
 
             combined_prompt = f"""
         User wants the following analysis (summarized):
         {interpretation}
         
         Now please create a plot or data analysis responding to the user request:
-        {user_query}
+        {new_user_query}
         """
 
             # 3) Call PandasAI
@@ -478,12 +508,9 @@ if __name__ == "__main__":
             with st.spinner("Generating chart..."):
                 answer = sdf.chat(combined_prompt)
 
-
             # 4) Grab the generated code
             st.session_state.pandas_code = code_callback.get_generated_code()
 
-            st.subheader("AI Response / Explanation")
-            st.write(answer)
 
             # 7) Retrieve & show the generated code
             code = code_callback.get_generated_code()
