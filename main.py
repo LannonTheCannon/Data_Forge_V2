@@ -23,39 +23,39 @@ from pandasai.responses.response_parser import ResponseParser
 # ------------------------------
 st.set_page_config(page_title="Advanced PandasAI + Vision Demo", layout="wide")
 
-st.markdown("""
-<style>
-#MainMenu {visibility: hidden;}
-[data-testid="stSidebar"] {
-    background-color: #f8f9fa;
-}
-.big-title {
-    font-size:2.0rem !important;
-    font-weight:900 !important;
-    color: #2B547E !important;
-    margin-bottom: 0.3em;
-}
-.section-header {
-    font-size:1.4rem !important;
-    font-weight:700 !important;
-    color: #003366 !important;
-    margin-top:1em !important;
-}
-.stTextArea, .stDataFrame, .st-code-block {
-    border: 1px solid #dadada;
-    border-radius: 4px;
-    background-color: #fafafa;
-    padding: 0.5em;
-}
-.css-1cpxqw2, .css-1q8dd3e, .stButton button {
-    background-color: #006aff !important;
-    color: white !important;
-    border-radius: 6px !important;
-    font-weight:600 !important;
-    border: none !important;
-}
-</style>
-""", unsafe_allow_html=True)
+# st.markdown("""
+# <style>
+# #MainMenu {visibility: hidden;}
+# [data-testid="stSidebar"] {
+#     background-color: #f8f9fa;
+# }
+# .big-title {
+#     font-size:2.0rem !important;
+#     font-weight:900 !important;
+#     color: #2B547E !important;
+#     margin-bottom: 0.3em;
+# }
+# .section-header {
+#     font-size:1.4rem !important;
+#     font-weight:700 !important;
+#     color: #003366 !important;
+#     margin-top:1em !important;
+# }
+# .stTextArea, .stDataFrame, .st-code-block {
+#     border: 1px solid #dadada;
+#     border-radius: 4px;
+#     background-color: #fafafa;
+#     padding: 0.5em;
+# }
+# .css-1cpxqw2, .css-1q8dd3e, .stButton button {
+#     background-color: #006aff !important;
+#     color: white !important;
+#     border-radius: 6px !important;
+#     font-weight:600 !important;
+#     border: none !important;
+# }
+# </style>
+# """, unsafe_allow_html=True)
 
 # ------------------------------
 # OpenAI Setup
