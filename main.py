@@ -173,7 +173,6 @@ Please provide a thorough interpretation of this chart:
 Avoid making assumptions beyond what the data or chart shows.
 """
     try:
-
         response = openai.chat.completions.create(
             model="gpt-4o-mini",   # or "gpt-4" if you have access
             messages=[
@@ -205,7 +204,6 @@ def generate_multiple_question_sets():
     question_set_3 = get_list_questions()
 
     return question_set_1, question_set_2, question_set_3
-
 
 def identify_common_questions(question_set_1, question_set_2, question_set_3):
     """Uses AI to analyze the three sets and identify the most common questions."""
@@ -494,6 +492,8 @@ if __name__ == "__main__":
             #response_parser = StreamlitResponse()
 
             llm = PandasOpenAI(api_token=st.secrets["OPENAI_API_KEY"])  # or a different LLM if desired
+            # client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+            # llm = openai.OpenAI(api_key=st.secrets['OPENAI_API_KEY'])
 
             sdf = SmartDataframe(
                 st.session_state.df,
@@ -509,8 +509,6 @@ if __name__ == "__main__":
 
             # 4) Grab the generated code
             st.session_state.pandas_code = code_callback.get_generated_code()
-
-
             # 7) Retrieve & show the generated code
             code = code_callback.get_generated_code()
 
