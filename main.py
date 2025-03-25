@@ -45,7 +45,6 @@ layout = [
     dashboard.Item("chart_item", 4, 0, 3, 3)   # Our new chart card
 ]
 
-
 if "chart_path" not in st.session_state:
     st.session_state.chart_path = None
 if 'editor_code' not in st.session_state:
@@ -291,40 +290,39 @@ def handle_layout_change(updated_layout):
     st.session_state['dashboard_layout'] = updated_layout
 
 def show_dashboard():
-    # If user has rearranged items in a previous session, reload that layout
-    current_layout = st.session_state.get("dashboard_layout", layout)
+    # If dashboard layout exists in session state, use it;
+    # otherwise, generate a layout dynamically based ont he number of saved charts.
+    saved_charts = st.session_state.get('saved_charts', [])
 
-    # Start the streamlit-elements container
+    if 'dashboard_layout' not in st.session_state:
+        dashboard_layout = []
+        for idx, chart_path in enumerate(saved_charts):
+            # for each chart, assign a card with a unique key
+            # here we set a default width and height and position them in a grid
+            x = (idx % 3) * 3 # three cards in a row
+            y = (idx // 3) * 3
+
+            dashboard_layout.append(dashboard.Item(f'chart_item_{idx}', x, y, 3, 3))
+        st.session_state['dashboard_layout'] = dashboard_layout
+    else:
+        dashboard_layout = st.session_state['dashboard_layout']
+
+    # Build the dashboard grid
     with elements("dashboard"):
         # Build the draggable/resizable grid
-        with dashboard.Grid(current_layout, onLayoutChange=handle_layout_change):
+        with dashboard.Grid(dashboard_layout, onLayoutChange=handle_layout_change):
+            # for each saved chart, create a draggable / resizeable Paper element
+            for idx, chart_path in enumerate(saved_charts):
+                with mui.Paper(key=f'chart_item_{idx}', sx={'height':'100%', 'overflow': 'auto'}):
+                    if os.path.exists(chart_path):
+                        b64 = to_base64(chart_path)
+                        html.Img(
+                            src=f"data:image/png;base64,{b64}",
+                            style={"maxWidth": "100%", "maxHeight": "100%"}
+                        )
+                    else:
+                        mui.Typography('Chart file not found')
 
-            # Paper 1
-            with mui.Paper(key="first_item"):
-                mui.Typography("First item")
-
-            # Paper 2 (not draggable)
-            with mui.Paper(key="second_item"):
-                mui.Typography("Second item (cannot drag)")
-
-            # Paper 3 (not resizable)
-            with mui.Paper(key="third_item"):
-                mui.Typography("Third item (cannot resize)")
-
-            # 🆕 Our Chart Card
-            # Make sure it's given a big enough default width/height
-            with mui.Paper(key="chart_item", sx={"height": "100%", "overflow": "auto"}):
-                if "saved_charts" in st.session_state and st.session_state["saved_charts"]:
-                    # For simplicity, assume there's only one chart; if multiple, you can loop.
-                    chart_path = st.session_state["saved_charts"][-1]  # last saved chart
-                    b64 = to_base64(chart_path)
-                    # Use an <img> tag that expands to fill the paper
-                    html.Img(
-                        src=f"data:image/png;base64,{b64}",
-                        style={"maxWidth": "100%", "maxHeight": "100%"}
-                    )
-                else:
-                    mui.Typography("No chart saved yet!")
 class StreamlitCallback(BaseCallback):
     def __init__(self, code_container, response_container) -> None:
         self.code_container = code_container
@@ -571,10 +569,21 @@ if __name__ == "__main__":
                     st.image(result["value"])
                     # ↓↓↓ ADD THIS “SAVE CHART” BUTTON ↓↓↓
                     if st.button("💾 Save Chart to Dashboard"):
-                        if "saved_charts" not in st.session_state:
-                            st.session_state["saved_charts"] = []
-                        st.session_state["saved_charts"].append(result["value"])
-                        st.success("Chart saved to dashboard!")
+                        if st.session_state.chart_path and os.path.exists(st.session_state.chart_path):
+                            import datetime
+                            # generate a unique filename using the current timestamp
+                            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                            new_filename = f'chart_{timestamp}.png'
+                            try:
+                                # copy the current temp chart file to the new unique file
+                                shutil.copy(st.session_state.chart_path, new_filename)
+                                # append the new filename to the saved_charts list
+                                st.session_state["saved_charts"].append(new_filename)
+                                st.success("chart saved to dashboard")
+                            except Exception as e:
+                                st.error(f'Error saving chart: {e}')
+                        else:
+                            st.error('No temporary chart available to save.')
 
                 elif result["type"] == "dataframe":
                     st.markdown('<p class="section-header">DataFrame Output</p>', unsafe_allow_html=True)
