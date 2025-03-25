@@ -8,6 +8,9 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 import streamlit as st
+from streamlit_ace import st_ace
+import inspect
+from streamlit_elements import elements, mui, html
 # from data import load_data
 from resources.documentation_page_1 import documentation_page
 # ------------------------------
@@ -23,40 +26,6 @@ from pandasai.responses.response_parser import ResponseParser
 # ------------------------------
 st.set_page_config(page_title="Advanced PandasAI + Vision Demo", layout="wide")
 
-# st.markdown("""
-# <style>
-# #MainMenu {visibility: hidden;}
-# [data-testid="stSidebar"] {
-#     background-color: #f8f9fa;
-# }
-# .big-title {
-#     font-size:2.0rem !important;
-#     font-weight:900 !important;
-#     color: #2B547E !important;
-#     margin-bottom: 0.3em;
-# }
-# .section-header {
-#     font-size:1.4rem !important;
-#     font-weight:700 !important;
-#     color: #003366 !important;
-#     margin-top:1em !important;
-# }
-# .stTextArea, .stDataFrame, .st-code-block {
-#     border: 1px solid #dadada;
-#     border-radius: 4px;
-#     background-color: #fafafa;
-#     padding: 0.5em;
-# }
-# .css-1cpxqw2, .css-1q8dd3e, .stButton button {
-#     background-color: #006aff !important;
-#     color: white !important;
-#     border-radius: 6px !important;
-#     font-weight:600 !important;
-#     border: none !important;
-# }
-# </style>
-# """, unsafe_allow_html=True)
-
 # ------------------------------
 # OpenAI Setup
 # ------------------------------
@@ -68,13 +37,14 @@ client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 ASSISTANT_ID = "asst_XXXX"
 THREAD_ID = "thread_YYYY"
 
-# -------------
-# Session State
-# -------------
 if "chart_path" not in st.session_state:
     st.session_state.chart_path = None
+if 'editor_code' not in st.session_state:
+    st.session_state.editor_code = ''
 if "pandas_code" not in st.session_state:
     st.session_state.pandas_code = None
+if "user_code_result" not in st.session_state:
+    st.session_state.user_code_result = None
 if "assistant_interpretation" not in st.session_state:
     st.session_state["assistant_interpretation"] = None
 if "user_query" not in st.session_state:
@@ -94,21 +64,6 @@ if "metadata_string" not in st.session_state:
 if "trigger_assistant" not in st.session_state:
     st.session_state["trigger_assistant"] = False  # Ensures assistant runs when needed
 
-
-# ------------------------------
-# 1) Load Some Example Data
-# ------------------------------
-# @st.cache_data
-# def load_data():
-#     # For demonstration, let's create a small random dataset
-#     import numpy as np
-#     df_example = pd.DataFrame({
-#         "transaction_amount": np.random.exponential(scale=100, size=1000),
-#         "fraud_label": np.random.choice([0,1], size=1000, p=[0.95, 0.05]),
-#         "customer_age": np.random.randint(18, 80, size=1000),
-#     })
-#     return df_example
-
 def reset_session_variables():
     # reset session state variables
 
@@ -126,8 +81,6 @@ def load_data(uploaded_file):
         df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
         return df
     return None
-
-# df = load_data()
 
 # ------------------------------
 # 2) Utility: Encode Image
@@ -328,49 +281,53 @@ that can be represented using line charts, bar graphs, scatter plots, or heatmap
         st.warning(f"Error in get_assistant_interpretation: {e}")
         return "Could not interpret user request."
 
-# ------------------------------
-# 5) Custom PandasAI Callbacks
-# ------------------------------
 class StreamlitCallback(BaseCallback):
-    def __init__(self) -> None:
+    def __init__(self, code_container, response_container) -> None:
+        self.code_container = code_container
+        self.response_container = response_container
         self.generated_code = ""
 
     def on_code(self, response: str):
         self.generated_code = response
+        self.code_container.code(response, language="python")
 
     def get_generated_code(self):
         return self.generated_code
 
 class StreamlitResponse(ResponseParser):
-    # Remove the __init__ method entirely, let the parent handle default context.
+    def __init__(self, context) -> None:
+        super().__init__(context)
 
     def format_dataframe(self, result):
         st.dataframe(result["value"])
-        st.session_state.chart_path = None
+        st.session_state.chart_generated = False
 
     def format_plot(self, result):
         chart_path = os.path.abspath("temp_chart.png")
         if isinstance(result["value"], str):
             existing_chart_path = os.path.abspath(result["value"])
             if existing_chart_path == chart_path:
+                st.session_state.chart_generated = True
                 st.session_state.chart_path = chart_path
             else:
                 try:
                     shutil.copy(existing_chart_path, chart_path)
+                    st.session_state.chart_generated = True
                     st.session_state.chart_path = chart_path
                 except Exception as e:
-                    st.error(f"Error copying chart: {e}")
-                    st.session_state.chart_path = None
+                    st.error(f"⚠️ Error copying chart: {e}")
+                    st.session_state.chart_generated = False
         elif isinstance(result["value"], plt.Figure):
             result["value"].savefig(chart_path)
+            st.session_state.chart_generated = True
             st.session_state.chart_path = chart_path
         else:
-            st.error("Unexpected chart format returned.")
-            st.session_state.chart_path = None
+            st.error("⚠️ Unexpected chart format returned.")
+            st.session_state.chart_generated = False
 
     def format_other(self, result):
-        st.markdown(f"### AI Insight:\n\n{result['value']}")
-        st.session_state.chart_path = None
+        st.markdown(f"### 📌 AI Insight\n\n{result['value']}")
+        st.session_state.chart_generated = False
 
 # ------------------------------
 # MAIN PAGE: Integrated Example
@@ -379,6 +336,8 @@ class StreamlitResponse(ResponseParser):
 PAGE_OPTIONS = [
     'Data Upload',
     'Pandas Chat',
+    "Code Editor",
+    'Dashboard',
     'Documentation'
 ]
 
@@ -414,13 +373,6 @@ if __name__ == "__main__":
         # 🚀 New Feature: Suggested Questions
         st.write("### Suggested Questions")
 
-        # if "question_list" not in st.session_state or not st.session_state["question_list"]:
-        #     st.session_state['metadata_string'], st.session_state["question_list"] = get_list_questions()  # Only generate once
-        #
-        # for idx, question in enumerate(st.session_state["question_list"]):
-        #     st.session_state["selected_question"] = question
-        #     st.write(question)
-
         # ---- Streamlit Integration ---- #
         if "question_list" not in st.session_state:
             st.session_state["question_list"] = []
@@ -445,11 +397,6 @@ if __name__ == "__main__":
             else:
                 st.write(f"{question}")
 
-        # user_query = st.text_input(
-        #     "Enter your question:",
-        #     value=st.session_state.get("user_query", "")
-        # )
-
         new_user_query = st.text_input(
             "Enter your question:",
             value=st.session_state.get("user_query", "")
@@ -473,6 +420,8 @@ if __name__ == "__main__":
             interpretation = st.session_state["assistant_interpretation"]  # Use existing interpretation
 
         if st.session_state.get('assistant_interpretation'):
+            code_container = st.container()
+            response_container = st.container()
             st.subheader("Assistant Interpretation")
             st.write(interpretation)
 
@@ -487,7 +436,7 @@ if __name__ == "__main__":
             # 3) Call PandasAI
             st.subheader("PandasAI Generating Chart Code")
 
-            code_callback = StreamlitCallback()
+            code_callback = StreamlitCallback(code_container, response_container)
 
             #response_parser = StreamlitResponse()
 
@@ -509,12 +458,7 @@ if __name__ == "__main__":
 
             # 4) Grab the generated code
             st.session_state.pandas_code = code_callback.get_generated_code()
-            # 7) Retrieve & show the generated code
-            code = code_callback.get_generated_code()
-
-            if code:
-                st.markdown("### Generated Code:")
-                st.code(code, language="python")
+            st.session_state.editor_code = st.session_state.pandas_code
 
             # 5) If a chart got created, show it
             if st.session_state.chart_path and os.path.exists(st.session_state.chart_path):
@@ -544,6 +488,75 @@ if __name__ == "__main__":
                 st.markdown(st.session_state.vision_result)
         else:
             st.write("*(No chart to interpret yet.)*")
+
+    elif page == "Code Editor":
+        st.markdown('<h1 class="big-title">User Code Editor & Execution</h1>', unsafe_allow_html=True)
+
+        if st.session_state.pandas_code:
+            st.markdown('<p class="section-header">AI-Generated Code (Editable)</p>', unsafe_allow_html=True)
+            edited_code = st_ace(
+                value=st.session_state.editor_code,
+                language="python",
+                theme="tomorrow",
+                key="code_editor",
+                height=750,
+            )
+            st.session_state.editor_code = edited_code
+
+            run_button = st.button("🚀 Run Code")
+            if run_button:
+                try:
+                    exec_locals = {}
+                    exec(st.session_state.editor_code, {"df": st.session_state.df, "pd": pd, "plt": plt, "st": st, "sns": sns},
+                         exec_locals)
+
+                    if "analyze_data" in exec_locals:
+                        analyze_func = exec_locals["analyze_data"]
+                        params = inspect.signature(analyze_func).parameters
+
+                        if "user_input" in params:
+                            result = analyze_func([st.session_state.df], user_input="")
+                        else:
+                            result = analyze_func([st.session_state.df])
+
+                        st.session_state.user_code_result = result
+
+                except Exception as e:
+                    st.error(f"⚠️ Error running the code: {e}")
+
+            if st.session_state.user_code_result:
+                result = st.session_state.user_code_result
+                if result["type"] == "plot":
+                    st.markdown('<p class="section-header">User-Generated Plot</p>', unsafe_allow_html=True)
+                    st.image(result["value"])
+                elif result["type"] == "dataframe":
+                    st.markdown('<p class="section-header">DataFrame Output</p>', unsafe_allow_html=True)
+                    st.dataframe(result["value"])
+                elif result["type"] == "string":
+                    st.markdown(f"### 📌 AI Insight\n\n{result['value']}")
+                elif result["type"] == "number":
+                    st.write(f"Result: {result['value']}")
+        else:
+            st.info("No generated code yet. Please go to 'PandasAI Insights' and enter a query first.")
+
+    elif page == 'Dashboard':
+        with elements('dashboard'):
+            from streamlit_elements import dashboard
+
+            layout = [
+                dashboard.Item('first item', 0, 0, 2, 2),
+                dashboard.Item('second item', 2, 0, 2, 2, isDraggable=False, moved=False),
+                dashboard.Item('third item', 0, 2, 1, 1, isResizable=False)
+            ]
+
+            def handle_layout_change(updated_layout):
+                print(updated_layout)
+
+            with dashboard.Grid(layout, onLayoutChange=handle_layout_change):
+                mui.Paper("First item", key="first_item")
+                mui.Paper("Second item (cannot drag)", key="second_item")
+                mui.Paper("Third item (cannot resize)", key="third_item")
+
 
     elif page == 'Documentation':
         documentation_page()

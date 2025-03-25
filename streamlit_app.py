@@ -25,50 +25,50 @@ from pandasai.responses.response_parser import ResponseParser
 # ------------------------------------------------
 st.set_page_config(page_title="Fraud Detection Dashboard", layout="wide")
 
-# Add custom CSS for styling
-st.markdown("""
-<style>
-/* Hide Streamlit default hamburger and footer */
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
-
-/* Customize the sidebar */
-[data-testid="stSidebar"] {
-    background-color: #f8f9fa;
-}
-
-/* Title and header styles */
-.big-title {
-    font-size:2.0rem !important;
-    font-weight:900 !important;
-    color: #2B547E !important;
-    margin-bottom: 0.3em;
-}
-.section-header {
-    font-size:1.4rem !important;
-    font-weight:700 !important;
-    color: #003366 !important;
-    margin-top:1em !important;
-}
-
-/* Subtle box styling */
-.stTextArea, .stDataFrame, .st-code-block {
-    border: 1px solid #dadada;
-    border-radius: 4px;
-    background-color: #fafafa;
-    padding: 0.5em;
-}
-
-/* Buttons */
-.css-1cpxqw2, .css-1q8dd3e, .stButton button {
-    background-color: #006aff !important;
-    color: white !important;
-    border-radius: 6px !important;
-    font-weight:600 !important;
-    border: none !important;
-}
-</style>
-""", unsafe_allow_html=True)
+# # Add custom CSS for styling
+# st.markdown("""
+# <style>
+# /* Hide Streamlit default hamburger and footer */
+# #MainMenu {visibility: hidden;}
+# footer {visibility: hidden;}
+#
+# /* Customize the sidebar */
+# [data-testid="stSidebar"] {
+#     background-color: #f8f9fa;
+# }
+#
+# /* Title and header styles */
+# .big-title {
+#     font-size:2.0rem !important;
+#     font-weight:900 !important;
+#     color: #2B547E !important;
+#     margin-bottom: 0.3em;
+# }
+# .section-header {
+#     font-size:1.4rem !important;
+#     font-weight:700 !important;
+#     color: #003366 !important;
+#     margin-top:1em !important;
+# }
+#
+# /* Subtle box styling */
+# .stTextArea, .stDataFrame, .st-code-block {
+#     border: 1px solid #dadada;
+#     border-radius: 4px;
+#     background-color: #fafafa;
+#     padding: 0.5em;
+# }
+#
+# /* Buttons */
+# .css-1cpxqw2, .css-1q8dd3e, .stButton button {
+#     background-color: #006aff !important;
+#     color: white !important;
+#     border-radius: 6px !important;
+#     font-weight:600 !important;
+#     border: none !important;
+# }
+# </style>
+# """, unsafe_allow_html=True)
 
 # ------------------------------------------------
 # 2) OpenAI & Assistant Setup
