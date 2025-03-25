@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import streamlit as st
 from streamlit_ace import st_ace
 import inspect
-from streamlit_elements import elements, mui, html
+from streamlit_elements import elements, dashboard, mui, html
 # from data import load_data
 from resources.documentation_page_1 import documentation_page
 # ------------------------------
@@ -36,6 +36,15 @@ client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 # Example Assistant ID & Thread (if you’re using a custom RAG endpoint).
 ASSISTANT_ID = "asst_XXXX"
 THREAD_ID = "thread_YYYY"
+
+layout = [
+    # (element_identifier, x, y, w, h, additional_props...)
+    dashboard.Item("first_item", 0, 0, 2, 2),  # Draggable & resizable by default
+    dashboard.Item("second_item", 2, 0, 2, 2),  # Not draggable
+    dashboard.Item("third_item", 0, 2, 1, 1),    # Not resizable
+    dashboard.Item("chart_item", 4, 0, 3, 3)   # Our new chart card
+]
+
 
 if "chart_path" not in st.session_state:
     st.session_state.chart_path = None
@@ -63,6 +72,8 @@ if "metadata_string" not in st.session_state:
     st.session_state['metadata_string'] = ""
 if "trigger_assistant" not in st.session_state:
     st.session_state["trigger_assistant"] = False  # Ensures assistant runs when needed
+if "saved_charts" not in st.session_state:
+    st.session_state['saved_charts'] = []
 
 def reset_session_variables():
     # reset session state variables
@@ -74,26 +85,23 @@ def reset_session_variables():
     st.session_state["user_query"] = ""  # Clear the input field as well
     st.session_state["trigger_assistant"] = False
 
-# Function to load the dataset
-
 def load_data(uploaded_file):
     if uploaded_file is not None:
         df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
         return df
     return None
 
-# ------------------------------
-# 2) Utility: Encode Image
-# ------------------------------
+def to_base64(path_to_png):
+    with open(path_to_png, "rb") as f:
+        data = f.read()
+    return base64.b64encode(data).decode("utf-8")
+
 def encode_image(image_path):
     with open(image_path, "rb") as image_file:
         encoded_str = base64.b64encode(image_file.read()).decode("utf-8")
         print("Base64 Image Length: ", len(encoded_str))
         return encoded_str
 
-# ------------------------------
-# 3) GPT-4 Vision Analysis
-# ------------------------------
 def analyze_chart_with_openai(image_path, user_request, assistant_summary, code, meta):
     if not os.path.exists(image_path):
         return "⚠️ No chart found."
@@ -240,9 +248,6 @@ Generate 5 structured questions that align with best practices in data analysis 
     except Exception as e:
         return [f"Error generating questions: {str(e)}"]
 
-# ------------------------------
-# 4) RAG Assistant Interpretation
-# ------------------------------
 def get_assistant_interpretation(user_input, metadata):
     prompt = f"""
 *Reinterpret the user’s request into a clear, visualization-ready question that aligns with the dataset’s 
@@ -281,6 +286,45 @@ that can be represented using line charts, bar graphs, scatter plots, or heatmap
         st.warning(f"Error in get_assistant_interpretation: {e}")
         return "Could not interpret user request."
 
+def handle_layout_change(updated_layout):
+    # Save user layout changes to session state
+    st.session_state['dashboard_layout'] = updated_layout
+
+def show_dashboard():
+    # If user has rearranged items in a previous session, reload that layout
+    current_layout = st.session_state.get("dashboard_layout", layout)
+
+    # Start the streamlit-elements container
+    with elements("dashboard"):
+        # Build the draggable/resizable grid
+        with dashboard.Grid(current_layout, onLayoutChange=handle_layout_change):
+
+            # Paper 1
+            with mui.Paper(key="first_item"):
+                mui.Typography("First item")
+
+            # Paper 2 (not draggable)
+            with mui.Paper(key="second_item"):
+                mui.Typography("Second item (cannot drag)")
+
+            # Paper 3 (not resizable)
+            with mui.Paper(key="third_item"):
+                mui.Typography("Third item (cannot resize)")
+
+            # 🆕 Our Chart Card
+            # Make sure it's given a big enough default width/height
+            with mui.Paper(key="chart_item", sx={"height": "100%", "overflow": "auto"}):
+                if "saved_charts" in st.session_state and st.session_state["saved_charts"]:
+                    # For simplicity, assume there's only one chart; if multiple, you can loop.
+                    chart_path = st.session_state["saved_charts"][-1]  # last saved chart
+                    b64 = to_base64(chart_path)
+                    # Use an <img> tag that expands to fill the paper
+                    html.Img(
+                        src=f"data:image/png;base64,{b64}",
+                        style={"maxWidth": "100%", "maxHeight": "100%"}
+                    )
+                else:
+                    mui.Typography("No chart saved yet!")
 class StreamlitCallback(BaseCallback):
     def __init__(self, code_container, response_container) -> None:
         self.code_container = code_container
@@ -328,10 +372,6 @@ class StreamlitResponse(ResponseParser):
     def format_other(self, result):
         st.markdown(f"### 📌 AI Insight\n\n{result['value']}")
         st.session_state.chart_generated = False
-
-# ------------------------------
-# MAIN PAGE: Integrated Example
-# ------------------------------
 
 PAGE_OPTIONS = [
     'Data Upload',
@@ -529,6 +569,13 @@ if __name__ == "__main__":
                 if result["type"] == "plot":
                     st.markdown('<p class="section-header">User-Generated Plot</p>', unsafe_allow_html=True)
                     st.image(result["value"])
+                    # ↓↓↓ ADD THIS “SAVE CHART” BUTTON ↓↓↓
+                    if st.button("💾 Save Chart to Dashboard"):
+                        if "saved_charts" not in st.session_state:
+                            st.session_state["saved_charts"] = []
+                        st.session_state["saved_charts"].append(result["value"])
+                        st.success("Chart saved to dashboard!")
+
                 elif result["type"] == "dataframe":
                     st.markdown('<p class="section-header">DataFrame Output</p>', unsafe_allow_html=True)
                     st.dataframe(result["value"])
@@ -540,23 +587,8 @@ if __name__ == "__main__":
             st.info("No generated code yet. Please go to 'PandasAI Insights' and enter a query first.")
 
     elif page == 'Dashboard':
-        with elements('dashboard'):
-            from streamlit_elements import dashboard
-
-            layout = [
-                dashboard.Item('first item', 0, 0, 2, 2),
-                dashboard.Item('second item', 2, 0, 2, 2, isDraggable=False, moved=False),
-                dashboard.Item('third item', 0, 2, 1, 1, isResizable=False)
-            ]
-
-            def handle_layout_change(updated_layout):
-                print(updated_layout)
-
-            with dashboard.Grid(layout, onLayoutChange=handle_layout_change):
-                mui.Paper("First item", key="first_item")
-                mui.Paper("Second item (cannot drag)", key="second_item")
-                mui.Paper("Third item (cannot resize)", key="third_item")
-
+        st.title("Dashboard of Saved Charts")
+        show_dashboard()
 
     elif page == 'Documentation':
         documentation_page()
