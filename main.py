@@ -294,6 +294,8 @@ def show_dashboard():
     # otherwise, generate a layout dynamically based ont he number of saved charts.
     saved_charts = st.session_state.get('saved_charts', [])
 
+    # Initialize dashboard only once
+    # Then, if new charts have been added, append new items
     if 'dashboard_layout' not in st.session_state:
         dashboard_layout = []
         for idx, chart_path in enumerate(saved_charts):
@@ -306,6 +308,14 @@ def show_dashboard():
         st.session_state['dashboard_layout'] = dashboard_layout
     else:
         dashboard_layout = st.session_state['dashboard_layout']
+        # if the number of saved charts has increased, append new items
+        if len(dashboard_layout) < len(saved_charts):
+            start_idx = len(dashboard_layout)
+            for idx in range(start_idx, len(saved_charts)):
+                x = (idx % 3) * 3
+                y = (idx // 3) * 3
+                dashboard_layout.append(dashboard.Item(f"chart_item_{idx}", x, y, 3, 3))
+            st.session_state['dashboard_layout'] = dashboard_layout
 
     # Build the dashboard grid
     with elements("dashboard"):
@@ -314,13 +324,13 @@ def show_dashboard():
             # for each saved chart, create a draggable / resizeable Paper element
             for idx, chart_path in enumerate(saved_charts):
                 with mui.Paper(key=f'chart_item_{idx}',
-                               sx={'height':'100%',
+                               sx={# 'height':'100%',
                                    #'overflow': 'auto',
                                    'minWidth': '200px',
                                    'minHeight': '200px',
                                    #'display': 'flex',
                                    #'justifyContent':'center',
-                                   'alignItems': 'center'
+                                   # 'alignItems': 'center'
                                    }
                                ):
                     if os.path.exists(chart_path):
@@ -330,7 +340,7 @@ def show_dashboard():
                             style={
                                 "maxWidth": "100%",
                                 "maxHeight": "100%",
-                                "objectFit": "cover"
+                                # "objectFit": "cover"
                             }
                         )
                     else:
