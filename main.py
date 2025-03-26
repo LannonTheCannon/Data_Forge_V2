@@ -313,12 +313,25 @@ def show_dashboard():
         with dashboard.Grid(dashboard_layout, onLayoutChange=handle_layout_change):
             # for each saved chart, create a draggable / resizeable Paper element
             for idx, chart_path in enumerate(saved_charts):
-                with mui.Paper(key=f'chart_item_{idx}', sx={'height':'100%', 'overflow': 'auto'}):
+                with mui.Paper(key=f'chart_item_{idx}',
+                               sx={'height':'100%',
+                                   #'overflow': 'auto',
+                                   'minWidth': '200px',
+                                   'minHeight': '200px',
+                                   #'display': 'flex',
+                                   #'justifyContent':'center',
+                                   'alignItems': 'center'
+                                   }
+                               ):
                     if os.path.exists(chart_path):
                         b64 = to_base64(chart_path)
                         html.Img(
                             src=f"data:image/png;base64,{b64}",
-                            style={"maxWidth": "100%", "maxHeight": "100%"}
+                            style={
+                                "maxWidth": "100%",
+                                "maxHeight": "100%",
+                                "objectFit": "cover"
+                            }
                         )
                     else:
                         mui.Typography('Chart file not found')
@@ -458,8 +471,6 @@ if __name__ == "__main__":
             interpretation = st.session_state["assistant_interpretation"]  # Use existing interpretation
 
         if st.session_state.get('assistant_interpretation'):
-            code_container = st.container()
-            response_container = st.container()
             st.subheader("Assistant Interpretation")
             st.write(interpretation)
 
@@ -473,7 +484,8 @@ if __name__ == "__main__":
 
             # 3) Call PandasAI
             st.subheader("PandasAI Generating Chart Code")
-
+            code_container = st.container()
+            response_container = st.container()
             code_callback = StreamlitCallback(code_container, response_container)
 
             #response_parser = StreamlitResponse()
