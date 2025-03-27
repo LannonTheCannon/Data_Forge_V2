@@ -286,61 +286,59 @@ that can be represented using line charts, bar graphs, scatter plots, or heatmap
         return "Could not interpret user request."
 
 def handle_layout_change(updated_layout):
-    # Save user layout changes to session state
     st.session_state['dashboard_layout'] = updated_layout
+    print("Updated layout in the app:", updated_layout)  # Goes to the app UI
 
 def show_dashboard():
     # If dashboard layout exists in session state, use it;
     # otherwise, generate a layout dynamically based ont he number of saved charts.
     saved_charts = st.session_state.get('saved_charts', [])
 
-    # Initialize dashboard only once
-    # Then, if new charts have been added, append new items
+    # Initialize dashboard_layout only once.
+
     if 'dashboard_layout' not in st.session_state:
-        dashboard_layout = []
-        for idx, chart_path in enumerate(saved_charts):
-            # for each chart, assign a card with a unique key
-            # here we set a default width and height and position them in a grid
-            x = (idx % 3) * 3 # three cards in a row
+        st.session_state.dashboard_layout = []
+
+    # If there are more saved charts than dashboard items,
+    # append new default items for the additional charts.
+
+    if len(st.session_state.dashboard_layout) < len(saved_charts):
+        start_idx = len(st.session_state.dashboard_layout)
+        for idx in range(start_idx, len(saved_charts)):
+            # Set default position and size (uniform for new charts).
+            x = (idx % 3) * 3  # Three cards per row.
             y = (idx // 3) * 3
+            st.session_state.dashboard_layout.append(
+                dashboard.Item(f'chart_item_{idx}', x, y, 3, 3,
+                               isDraggable=True, isResizable=True),
+            )
 
-            dashboard_layout.append(dashboard.Item(f'chart_item_{idx}', x, y, 3, 3))
-        st.session_state['dashboard_layout'] = dashboard_layout
-    else:
-        dashboard_layout = st.session_state['dashboard_layout']
-        # if the number of saved charts has increased, append new items
-        if len(dashboard_layout) < len(saved_charts):
-            start_idx = len(dashboard_layout)
-            for idx in range(start_idx, len(saved_charts)):
-                x = (idx % 3) * 3
-                y = (idx // 3) * 3
-                dashboard_layout.append(dashboard.Item(f"chart_item_{idx}", x, y, 3, 3))
-            st.session_state['dashboard_layout'] = dashboard_layout
-
+    # Use the dashboard_layout from session state.
+    dashboard_layout = st.session_state.dashboard_layout
+    print("Dashboard Layout:", dashboard_layout)  # Debug: see current layout
     # Build the dashboard grid
     with elements("dashboard"):
-        # Build the draggable/resizable grid
-        with dashboard.Grid(dashboard_layout, onLayoutChange=handle_layout_change):
-            # for each saved chart, create a draggable / resizeable Paper element
+        with dashboard.Grid(dashboard_layout, onLayoutChange=handle_layout_change, key='my_dashboard_grid'):
+            # For each saved chart, create a draggable/resizable Paper element.
             for idx, chart_path in enumerate(saved_charts):
                 with mui.Paper(key=f'chart_item_{idx}',
-                               sx={# 'height':'100%',
-                                   #'overflow': 'auto',
+                               sx={
                                    'minWidth': '200px',
                                    'minHeight': '200px',
-                                   #'display': 'flex',
-                                   #'justifyContent':'center',
-                                   # 'alignItems': 'center'
-                                   }
-                               ):
+                                   'overflow': 'hidden',
+                                   'display': 'flex',
+                                   'justifyContent': 'center',
+                                   'alignItems': 'center'
+                               }):
+
                     if os.path.exists(chart_path):
                         b64 = to_base64(chart_path)
                         html.Img(
                             src=f"data:image/png;base64,{b64}",
                             style={
-                                "maxWidth": "100%",
-                                "maxHeight": "100%",
-                                # "objectFit": "cover"
+                                "width": "100%",
+                                "height": "100%",
+                                "objectFit": "cover"  # This scales the image to fill the card nicely.
                             }
                         )
                     else:
@@ -396,7 +394,8 @@ class StreamlitResponse(ResponseParser):
 
 PAGE_OPTIONS = [
     'Data Upload',
-    'Pandas Chat',
+    'Mind Mapping',
+    'Pandas Viz',
     "Code Editor",
     'Dashboard',
     'Documentation'
@@ -426,15 +425,13 @@ if __name__ == "__main__":
             st.write("### Data Summary")
             st.write(st.session_state.df_summary)
 
-    elif page == 'Pandas Chat':
+    elif page == 'Mind Mapping':
+        st.title('Mind Mapping + OpenAI Ensemble Completions')
+        st.write('Identify a category of the dataset you would like to explore.')
 
-        st.title("Advanced PandasAI + Vision GPT-4 Workflow")
-        st.write("Enter a question to generate a chart, then interpret it with extra context.")
+        # New Feature: Suggested Categories
+        st.write('### Suggested Questions')
 
-        # 🚀 New Feature: Suggested Questions
-        st.write("### Suggested Questions")
-
-        # ---- Streamlit Integration ---- #
         if "question_list" not in st.session_state:
             st.session_state["question_list"] = []
 
@@ -457,6 +454,10 @@ if __name__ == "__main__":
                     st.session_state["trigger_assistant"] = True  # Ensure assistant runs
             else:
                 st.write(f"{question}")
+
+    elif page == 'Pandas Viz':
+
+        st.title('Pandas Visualization')
 
         new_user_query = st.text_input(
             "Enter your question:",
