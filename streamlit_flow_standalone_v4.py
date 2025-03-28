@@ -1,85 +1,73 @@
-# This app creates a recursive mind map.
-# Clicking the center node adds 4 children.
-# Clicking any child node adds 4 more children to that node.
-
 import streamlit as st
 from streamlit_flow import streamlit_flow
 from streamlit_flow.elements import StreamlitFlowNode, StreamlitFlowEdge
 from streamlit_flow.state import StreamlitFlowState
-from streamlit_flow.layouts import RadialLayout
-from resources.documentation_page_1 import documentation_page
+from streamlit_flow.layouts import ManualLayout  # Or TreeLayout, etc.
+import random
+from uuid import uuid4
 
-# ----------------- Color Palette ------------------
-COLOR_PALETTE = ["#FF6B6B", "#6BCB77", "#4D96FF", "#FFD93D", "#845EC2", "#F9A826"]
+st.set_page_config(layout="wide")
+page = st.sidebar.radio("Go to", ["Flow Editor", "Inspector"])
 
-# ----------------- Helper Functions ------------------
-def get_color_for_depth(depth):
-    return COLOR_PALETTE[depth % len(COLOR_PALETTE)]
-
-def get_node_depth(node_id):
-    return node_id.count('_')
-
-def add_children_to_node(node_id):
-    depth = get_node_depth(node_id) + 1
-    color = get_color_for_depth(depth)
-    current_children = [n for n in st.session_state.nodes if n.id.startswith(f"{node_id}_")]
-    base_count = len(current_children)
-
-    for i in range(1, 5):
-        new_id = f"{node_id}_{base_count+i}"
-        new_label = f"Node {new_id.split('_')[-1]}"
-        new_node = StreamlitFlowNode(
-            new_id,
-            pos=(i, 0),
-            data={"content": new_label},
-            node_type="default",
-            source_position="right",
-            target_position="left",
-            style={"backgroundColor": color}
-        )
-        new_edge = StreamlitFlowEdge(f"{node_id}-{new_id}", node_id, new_id, animated=True)
-
-        st.session_state.nodes.append(new_node)
-        st.session_state.edges.append(new_edge)
-    st.session_state.expanded_nodes.add(node_id)
-
-# ----------------- Stream Flow Page ------------------
-def stream_flow():
-    state = StreamlitFlowState(nodes=st.session_state.nodes, edges=st.session_state.edges)
-    updated_state = streamlit_flow(
-        "mind_map",
-        state,
-        layout=RadialLayout(),
-        fit_view=True,
-        height=600,
-        get_node_on_click=True
+# 🔐 Initialize flow only once
+if "curr_state" not in st.session_state:
+    st.session_state.curr_state = StreamlitFlowState(
+        nodes=[
+            StreamlitFlowNode("1", (0, 0), {'content': 'Node 1'}, 'input', 'right'),
+            StreamlitFlowNode("2", (1, 0), {'content': 'Node 2'}, 'default', 'right', 'left'),
+        ],
+        edges=[
+            StreamlitFlowEdge("1-2", "1", "2", animated=True)
+        ]
     )
 
-    clicked = updated_state.selected_id
-    if clicked and clicked not in st.session_state.expanded_nodes:
-        add_children_to_node(clicked)
-        st.rerun()
+if page == "Flow Editor":
+    st.title("🧠 Flow Editor")
 
-# ----------------- Sidebar Navigation ------------------
-PAGE_OPTIONS = [
-    "Stream Flow",
-    "Documentation"
-]
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("Add Node"):
+            new_node = StreamlitFlowNode(
+                str(uuid4()), (random.randint(0, 4), random.randint(0, 4)),
+                {'content': f'Node {len(st.session_state.curr_state.nodes)+1}'},
+                'default', 'right', 'left'
+            )
+            st.session_state.curr_state.nodes.append(new_node)
+            st.rerun()
 
-page = st.sidebar.radio("Select a Page", PAGE_OPTIONS)
+    with col2:
+        if st.button("Reset Flow"):
+            del st.session_state.curr_state
+            st.rerun()
 
-# ----------------- Session State Initialization ------------------
-if "nodes" not in st.session_state:
-    root = StreamlitFlowNode("root", (0, 0), {"content": "Dataset"}, "input", "right", style={"backgroundColor": COLOR_PALETTE[0]})
-    st.session_state.nodes = [root]
-    st.session_state.edges = []
-    st.session_state.expanded_nodes = set()
+    # Render the flow diagram
+    st.session_state.curr_state = streamlit_flow(
+        "flow",
+        st.session_state.curr_state,
+        layout=ManualLayout(),  # Prevents layout from auto-resetting
+        fit_view=True,
+        height=500,
+        allow_new_edges=True,
+        get_node_on_click=True,
+        get_edge_on_click=True,
+        enable_node_menu=True,
+        enable_edge_menu=True,
+        show_minimap=True
+    )
 
-# ----------------- Page Routing ------------------
-if page == "Stream Flow":
-    st.title("📊 Interactive Data Mind Map")
-    st.caption("Click a node to add 4 new branches. Explore recursively.")
-    stream_flow()
+elif page == "Inspector":
+    st.title("🛠️ Flow Inspector")
 
-elif page == "Documentation":
-    documentation_page()
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("Nodes")
+        for node in st.session_state.curr_state.nodes:
+            st.json(vars(node))
+
+    with col2:
+        st.subheader("Edges")
+        for edge in st.session_state.curr_state.edges:
+            st.json(vars(edge))
+
+    st.subheader("Selected Element")
+    st.write(st.session_state.curr_state.selected_id)

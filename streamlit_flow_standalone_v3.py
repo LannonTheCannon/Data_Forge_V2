@@ -74,9 +74,19 @@ st.sidebar.markdown("### Instructions")
 st.sidebar.write("- Click any node to expand it with 4 children")
 st.sidebar.write("- Expansions are recursive and color-coded by depth")
 
-if st.sidebar.button("🔄 Reset Map"):
+PAGE_OPTIONS = [
+    'Mind Mapping',
+    'Hello World'
+]
+
+page = st.sidebar.radio("Go to", ["Flow Editor", "Inspector"])
+
+if page == 'Mind Mapping':
     root = StreamlitFlowNode("root", (0, 0), {"content": "Dataset"}, "input", "right", style={"backgroundColor": "#FF6B6B"})
     st.session_state.curr_state = StreamlitFlowState(nodes=[root], edges=[])
     st.session_state.expanded_nodes = set()
     st.session_state.color_map = {}
     st.rerun()
+
+elif page == 'Hello World':
+    pass
