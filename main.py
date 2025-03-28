@@ -20,12 +20,19 @@ from pandasai import SmartDataframe
 from pandasai.llm import OpenAI as PandasOpenAI
 from pandasai.callbacks import BaseCallback
 from pandasai.responses.response_parser import ResponseParser
+# ------------------------------
+# Streamlit Layout
+# ------------------------------
+from streamlit_flow import streamlit_flow
+from streamlit_flow.elements import StreamlitFlowNode, StreamlitFlowEdge
+from streamlit_flow.state import StreamlitFlowState
+from streamlit_flow.layouts import RadialLayout
+
 
 # ------------------------------
 # Streamlit Layout
 # ------------------------------
 st.set_page_config(page_title="Advanced PandasAI + Vision Demo", layout="wide")
-
 # ------------------------------
 # OpenAI Setup
 # ------------------------------
@@ -44,6 +51,9 @@ layout = [
     dashboard.Item("third_item", 0, 2, 1, 1),    # Not resizable
     dashboard.Item("chart_item", 4, 0, 3, 3)   # Our new chart card
 ]
+
+# ----------------- Color Palette ------------------
+COLOR_PALETTE = ["#FF6B6B", "#6BCB77", "#4D96FF", "#FFD93D", "#845EC2", "#F9A826"]
 
 if "chart_path" not in st.session_state:
     st.session_state.chart_path = None
