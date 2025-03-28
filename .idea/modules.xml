@@ -2,7 +2,6 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/../CODE_STREAM/.idea/CODE_STREAM.iml" filepath="$PROJECT_DIR$/../CODE_STREAM/.idea/CODE_STREAM.iml" />
       <module fileurl="file://$PROJECT_DIR$/../Coders_University/.idea/Coders_University.iml" filepath="$PROJECT_DIR$/../Coders_University/.idea/Coders_University.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/Data_Forge_V2.iml" filepath="$PROJECT_DIR$/.idea/Data_Forge_V2.iml" />
     </modules>

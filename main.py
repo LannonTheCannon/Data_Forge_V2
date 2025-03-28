@@ -23,10 +23,10 @@ from pandasai.responses.response_parser import ResponseParser
 # ------------------------------
 # Streamlit Layout
 # ------------------------------
-from streamlit_flow import streamlit_flow
-from streamlit_flow.elements import StreamlitFlowNode, StreamlitFlowEdge
-from streamlit_flow.state import StreamlitFlowState
-from streamlit_flow.layouts import RadialLayout
+# from streamlit_flow import streamlit_flow
+# from streamlit_flow.elements import StreamlitFlowNode, StreamlitFlowEdge
+# from streamlit_flow.state import StreamlitFlowState
+# from streamlit_flow.layouts import RadialLayout
 
 
 # ------------------------------
