@@ -1,6 +1,7 @@
 import os
 import time
 import base64
+import numpy as np
 import shutil
 import io
 import openai
@@ -652,7 +653,7 @@ if __name__ == "__main__":
             if run_button:
                 try:
                     exec_locals = {}
-                    exec(st.session_state.editor_code, {"df": st.session_state.df, "pd": pd, "plt": plt, "st": st, "sns": sns},
+                    exec(st.session_state.editor_code, {"df": st.session_state.df, "pd": pd, "plt": plt, "st": st, "sns": sns, "np": np},
                          exec_locals)
 
                     if "analyze_data" in exec_locals:
