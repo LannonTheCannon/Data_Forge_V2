@@ -45,7 +45,43 @@ def load_data(uploaded_file):
         return df
     return None
 
+def generate_root_summary_question(metadata_string: str) -> str:
+    """
+    Uses OpenAI to produce a single-sentence question or statement that describes
+    or summarizes the dataset metadata.
+    :param metadata_str:
+    :return: beautified metadata str
+    """
+    if not metadata_string:
+        return "Overview of the dataset"
 
+    messages = [
+        {
+            "role": "system",
+            "content": """You are a data summarizer. 
+               Given dataset metadata, produce a single-sentence question 
+               or statement that captures the main theme or focus of the dataset. 
+               Keep it short (one sentence) and neutral."""
+        },
+        {
+            "role": "user",
+            "content": f"Dataset metadata:\n{metadata_string}\n\nPlease provide one short question about the dataset."
+        }
+    ]
+
+    try:
+        response = openai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            max_tokens=50  # Enough for a short response
+        )
+        text = response.choices[0].message.content.strip()
+        # Just in case the model returns multiple lines, combine them or take first line
+        lines = text.split("\n")
+        return lines[0].strip()
+    except Exception as e:
+        # Fallback if there's an error
+        return "What is the primary focus of this dataset?"
 # --------------------------------------------------------------------------------
 # OPENAI Question Generation + Identification
 # --------------------------------------------------------------------------------
@@ -347,12 +383,16 @@ if page == '📁 Data Upload':
                     f"Summary Stats:\n{st.session_state.df_summary}"
                 )
 
-            # Update root node content
-            if st.session_state.curr_state.nodes:
-                root_node = st.session_state.curr_state.nodes[0]
-                root_node.data["content"] = st.session_state.dataset_name
-                # Store the full metadata as the "full_question" for the root
-                root_node.data["full_question"] = st.session_state.metadata_string
+                # Produce a one-sentence question describing the dataset
+                root_question = generate_root_summary_question(st.session_state.metadata_string)
+
+                # Update the root node's data if it exists:
+                if st.session_state.curr_state.nodes:
+                    root_node = st.session_state.curr_state.nodes[0]
+                    root_node.data["full_question"] = root_question
+                    # Optionally display it on the node itself:
+                    root_node.data["content"] = "ROOT"  # or root_node.data["content"] = root_question
+                    root_node.data["short_label"] = "ROOT"
 
     # Display preview & summary if data exists
     if st.session_state.df is not None:
@@ -361,6 +401,8 @@ if page == '📁 Data Upload':
 
         st.write("### Data Summary")
         st.write(st.session_state.df_summary)
+
+
 
 # --------------------------------------------------------------------------------
 # Page: Mind Mapping
@@ -401,7 +443,7 @@ elif page == "🧠 Mind Mapping":
     st.session_state.curr_state = streamlit_flow(
         "mind_map",
         st.session_state.curr_state,
-        layout=RadialLayout('right'),
+        layout=TreeLayout(direction="right"),
         fit_view=True,
         height=550,
         get_node_on_click=True,
@@ -513,7 +555,7 @@ elif page == "🎨 Flow Editor":
     st.session_state.curr_state = streamlit_flow(
         "editor_flow",
         st.session_state.curr_state,
-        layout=TreeLayout(direction="right"),
+        # layout=TreeLayout(direction="right"),
         fit_view=True,
         height=550,
         enable_node_menu=True,
