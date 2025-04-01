@@ -61,7 +61,8 @@ COLOR_PALETTE = ["#FF6B6B", "#6BCB77", "#4D96FF", "#FFD93D", "#845EC2", "#F9A826
 
 # ------------------- Initialize Session -------------------
 if "curr_state" not in st.session_state:
-    root = StreamlitFlowNode("root", (0, 0), {"content": "Dataset"}, "input", "right", style={"backgroundColor": "#FF6B6B"})
+    dataset_label = st.session_state.get("dataset_name", "Dataset")
+    root = StreamlitFlowNode("root", (0, 0), {"content": dataset_label}, "input", "right", style={"backgroundColor": "#FF6B6B"})
     st.session_state.curr_state = StreamlitFlowState(nodes=[root], edges=[])
     st.session_state.expanded_nodes = set()
     st.session_state.color_map = {}
@@ -94,6 +95,8 @@ if "trigger_assistant" not in st.session_state:
     st.session_state["trigger_assistant"] = False  # Ensures assistant runs when needed
 if "saved_charts" not in st.session_state:
     st.session_state['saved_charts'] = []
+if 'dataset_name' not in st.session_state:
+    st.session_state['dataset_name'] = ""
 
 # ------------------- Color Setup -------------------
 COLOR_PALETTE = ["#FF6B6B", "#6BCB77", "#4D96FF", "#FFD93D", "#845EC2", "#F9A826"]
@@ -471,6 +474,10 @@ if __name__ == "__main__":
                 st.session_state.df_preview = df.head()
                 st.session_state.df_summary = df.describe()
 
+                # Save dataset name without extension
+                dataset_name = uploaded_file.name.rsplit('.', 1)[0]
+                st.session_state['dataset_name'] = dataset_name
+
         # Display preview & summary if data exists
         if st.session_state.df is not None:
             st.write("### Data Preview")
@@ -482,11 +489,19 @@ if __name__ == "__main__":
     elif page == 'Mind Mapping V2':
         st.title("🧠 Recursive Mind Map Explorer")
 
+        # Check if dataset name is present and current root label is outdated
+        if st.session_state.get("dataset_name") and st.session_state.curr_state.nodes[0].data["content"] != \
+                st.session_state["dataset_name"]:
+            st.session_state.curr_state.nodes[0].data["content"] = st.session_state["dataset_name"]
+
         col1, col2 = st.columns([3, 1])
         with col2:
             if st.button("🔄 Reset Mind Map"):
-                root = StreamlitFlowNode("root", (0, 0), {"content": "Dataset"}, "input", "right",
-                                         style={"backgroundColor": "#FF6B6B"})
+                root = StreamlitFlowNode("root",
+                                         (0, 0),
+                                         {"content": st.session_state.dataset_name},
+                                         "default",
+                                         "right", style={"backgroundColor": "#FF6B6B"})
                 st.session_state.curr_state = StreamlitFlowState(nodes=[root], edges=[])
                 st.session_state.expanded_nodes = set()
                 st.session_state.color_map = {}
