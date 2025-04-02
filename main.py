@@ -28,7 +28,7 @@ import streamlit as st
 from streamlit_flow import streamlit_flow
 from streamlit_flow.elements import StreamlitFlowNode, StreamlitFlowEdge
 from streamlit_flow.state import StreamlitFlowState
-from streamlit_flow.layouts import ManualLayout, RadialLayout  # Or TreeLayout, etc.
+from streamlit_flow.layouts import ManualLayout, RadialLayout, TreeLayout
 import random
 from uuid import uuid4
 # ------------------------------------------------------------------
@@ -61,11 +61,25 @@ COLOR_PALETTE = ["#FF6B6B", "#6BCB77", "#4D96FF", "#FFD93D", "#845EC2", "#F9A826
 
 # ------------------- Initialize Session -------------------
 if "curr_state" not in st.session_state:
+    # Prepare root node. We'll store the dataset metadata in "full_question" if we have it.
     dataset_label = st.session_state.get("dataset_name", "Dataset")
-    root = StreamlitFlowNode("root", (0, 0), {"content": dataset_label}, "input", "right", style={"backgroundColor": "#FF6B6B"})
-    st.session_state.curr_state = StreamlitFlowState(nodes=[root], edges=[])
+
+    # We'll call it "S0" for the section path.
+    root_node = StreamlitFlowNode(
+        "S0",
+        (0, 0),
+        {
+            "section_path": "S0",
+            "short_label": "ROOT",
+            "full_question": "",  # We'll fill in once we have metadata
+            "content": dataset_label
+        },
+        "input",
+        "right",
+        style={"backgroundColor": COLOR_PALETTE[0]}
+    )
+    st.session_state.curr_state = StreamlitFlowState(nodes=[root_node], edges=[])
     st.session_state.expanded_nodes = set()
-    st.session_state.color_map = {}
 
 if "chart_path" not in st.session_state:
     st.session_state.chart_path = None
@@ -108,34 +122,302 @@ if "expanded_nodes" not in st.session_state:
 # ------------------- Color Setup -------------------
 COLOR_PALETTE = ["#FF6B6B", "#6BCB77", "#4D96FF", "#FFD93D", "#845EC2", "#F9A826"]
 
-def get_color_for_depth(depth):
+# ------------------ STEP 1 DATA UPLOAD -------------------#
+def load_data(uploaded_file):
+    if uploaded_file is not None:
+        df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
+        return df
+    return None
+
+# ------------------- Mind Mapping Logic -------------------
+
+def generate_root_summary_question(metadata_string: str) -> str:
+    """
+    Uses OpenAI to produce a single-sentence question or statement that describes
+    or summarizes the dataset metadata.
+    :param metadata_str:
+    :return: beautified metadata str
+    """
+    if not metadata_string:
+        return "Overview of the dataset"
+
+    messages = [
+        {
+            "role": "system",
+            "content": """You are a data summarizer. 
+               Given dataset metadata, produce a single-sentence question 
+               or statement that captures the main theme or focus of the dataset. 
+               Keep it short (one sentence) and neutral."""
+        },
+        {
+            "role": "user",
+            "content": f"Dataset metadata:\n{metadata_string}\n\nPlease provide one short question about the dataset."
+        }
+    ]
+
+    try:
+        response = openai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            max_tokens=50  # Enough for a short response
+        )
+        text = response.choices[0].message.content.strip()
+        # Just in case the model returns multiple lines, combine them or take first line
+        lines = text.split("\n")
+        return lines[0].strip()
+    except Exception as e:
+        # Fallback if there's an error
+        return "What is the primary focus of this dataset?"
+
+def get_list_questions(context: str):
+    """
+    Generate 5 questions given the dataset metadata plus
+    the parent's context (if any).
+    """
+    if "df_summary" not in st.session_state or st.session_state.df_summary is None:
+        return ["No dataset summary found. Please upload a dataset first."]
+
+    # Build base metadata from session
+    metadata = {
+        "columns": list(st.session_state.df_summary.columns),
+        "summary": st.session_state.df_summary.to_dict(),
+        "row_count": st.session_state.df.shape[0] if st.session_state.df is not None else 0
+    }
+    metadata_string = (
+        f"Columns: {', '.join(metadata['columns'])}\n"
+        f"Total Rows: {metadata['row_count']}\n"
+        f"Summary Stats: {metadata['summary']}"
+    )
+
+    # You can combine the parent's 'context' (question text) with the metadata
+    # so the AI knows what the user is focusing on.
+    combined_context = (
+        f"Parent's context/question: {context}\n\n"
+        f"Dataset metadata:\n{metadata_string}"
+    )
+
+    messages = [
+        {
+            "role": "system",
+            "content": """You are a data analyst assistant that generates concise, structured, 
+            and insightful visualization questions. Each question should focus on 
+            specific data relationships or trends, referencing the relevant columns when possible.
+            You are a data analyst assistant that generates insightful and structured visualization questions based on dataset metadata. 
+
+            - These questions must be optimized for use with the Pandas AI Smart DataFrame.
+            - They should be **concise** and **direct**, avoiding overly descriptive or wordy phrasing.
+            - Each question should focus on **specific relationships** or **trends** that can be effectively visualized.
+            - Prioritize **correlation, distribution, time-based trends, and categorical comparisons** in the dataset.
+            - Format them as a numbered list.
+            
+            Given the following dataset metadata:
+            {metadata_string}
+            
+            Generate 4 structured questions that align with best practices in data analysis and visualization. 
+            
+            """
+        },
+        {
+            "role": "user",
+            "content": f"Given the context and metadata below, generate 4 short data analysis questions:\n{combined_context}"
+        }
+    ]
+
+    try:
+        response = openai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            max_tokens=800
+        )
+        raw = response.choices[0].message.content.strip()
+        questions = raw.split("\n")
+        # Filter out empty lines
+        cleaned = [q.strip() for q in questions if q.strip()]
+        return cleaned
+
+    except Exception as e:
+        return [f"Error generating questions: {str(e)}"]
+
+def generate_multiple_question_sets(parent_context: str):
+    """
+    Calls get_list_questions 3 times to create 3 sets of questions
+    using the parent's context (full question or dataset metadata).
+    """
+    q1 = get_list_questions(parent_context)
+    q2 = get_list_questions(parent_context)
+    q3 = get_list_questions(parent_context)
+    return q1, q2, q3
+
+def identify_common_questions(question_set_1, question_set_2, question_set_3):
+    """
+    Uses AI to find the most relevant, commonly occurring questions
+    across the three sets. We'll return the top 4.
+    """
+    joined_1 = "\n".join(question_set_1)
+    joined_2 = "\n".join(question_set_2)
+    joined_3 = "\n".join(question_set_3)
+
+    messages = [
+        {
+            "role": "system",
+            "content": """You are an expert data analyst assistant. 
+               Identify the 4 most relevant and commonly occurring questions 
+               from the three sets. Provide exactly 4 lines with no numbers,
+               bullet points, or additional text. """
+        },
+        {
+            "role": "user",
+            "content": f"""Set 1:\n{joined_1}\n
+                            Set 2:\n{joined_2}\n
+                            Set 3:\n{joined_3}\n
+                            Please provide exactly 4 questions, each on its own line, with no numbering."""
+        }
+    ]
+    try:
+        response = openai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            max_tokens=800
+        )
+        raw = response.choices[0].message.content.strip()
+        lines = [l.strip() for l in raw.split("\n") if l.strip()]
+        # If more than 4 lines come back, just take the first 4
+        return lines[:4]
+    except Exception as e:
+        return [f"Error identifying common questions: {str(e)}"]
+
+def paraphrase_questions(questions):
+    """
+    Paraphrase multiple questions into short labels or titles.
+    Returns a list of short strings (one for each question).
+    """
+    joined = "\n".join(questions)
+    messages = [
+        {
+            "role": "system",
+            "content": """You are a helpful assistant that transforms full-length data analysis
+            questions into short, descriptive labels (5-8 words max). 
+            Example: 'How do sales vary by region?' -> 'Sales by Region'."""
+        },
+        {
+            "role": "user",
+            "content": f"Please paraphrase each question into a short label:\n{joined}"
+        }
+    ]
+
+    try:
+        response = openai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            max_tokens=500
+        )
+        raw = response.choices[0].message.content.strip()
+        lines = [l.strip() for l in raw.split("\n") if l.strip()]
+        # Attempt to match them one-to-one
+        # Ensure we only return as many paraphrases as we had questions
+        paraphrased = lines[:len(questions)]
+        return paraphrased
+    except Exception as e:
+        # On error, just return the original questions
+        return questions
+
+def get_section_path_children(parent_path: str, num_children=4):
+    """
+    Given a parent's section path like 'S0.1', produce a list:
+    ['S0.1.1', 'S0.1.2', 'S0.1.3', 'S0.1.4'].
+    """
+    children = []
+    for i in range(1, num_children + 1):
+        new_path = f"{parent_path}.{i}"
+        children.append(new_path)
+    return children
+
+def get_color_for_depth(section_path: str):
+    """
+    Depth = number of dots in the section path
+    For example, S0 -> depth 0, S0.1 -> depth 1, S0.1.2 -> depth 2, etc.
+    Then use your existing COLOR_PALETTE.
+    """
+    depth = section_path.count(".")
     return COLOR_PALETTE[depth % len(COLOR_PALETTE)]
+
+def expand_node_with_questions(clicked_node):
+    """
+    1) Figure out the parent's context. If it's the root, context = dataset metadata.
+       Otherwise, context = parent's full question.
+    2) Generate 4 new questions via the ensemble approach.
+    3) Paraphrase them for short labels.
+    4) Create child nodes labeled with the parent's section_path + .1, .2, .3, .4.
+    5) Connect them in the flow.
+    6) Mark the parent node as expanded.
+    7) Log the parent's full question in st.session_state.clicked_questions.
+    """
+    # 1) Get parent's full_question if it exists, else fallback to dataset metadata
+    parent_full_question = clicked_node.data.get("full_question", "")
+    if not parent_full_question:
+        # Probably the root node
+        parent_full_question = f"(Root) Dataset Metadata:\n{st.session_state.metadata_string}"
+
+    # 2) Generate 3 sets of questions & pick the top 4
+    q1, q2, q3 = generate_multiple_question_sets(parent_full_question)
+    top_questions = identify_common_questions(q1, q2, q3)
+
+    # 3) Paraphrase them for short node labels
+    short_labels = paraphrase_questions(top_questions)
+
+    # 4) Create the child nodes. Derive their section paths
+    parent_path = clicked_node.data.get("section_path", "S0")  # Root is "S0" by default
+    child_paths = get_section_path_children(parent_path, num_children=4)
+
+    for i, child_path in enumerate(child_paths):
+        # For each new question, create a node
+        new_node_id = child_path  # We'll also use it for the node ID
+        color = get_color_for_depth(child_path)
+
+        child_full_question = top_questions[i] if i < len(top_questions) else "N/A"
+        child_short_label = short_labels[i] if i < len(short_labels) else child_full_question[:30]
+
+        new_node = StreamlitFlowNode(
+            new_node_id,
+            (random.randint(-100, 100), random.randint(-100, 100)),
+            {
+                "section_path": child_path,
+                "short_label": child_short_label,
+                "full_question": child_full_question,
+
+                # This is the key part:
+                # Set the node's displayed text to your short label.
+                "content": f"**{child_short_label}**"
+            },
+            "default",
+            "right",
+            "left",
+            style={"backgroundColor": color}
+        )
+
+        # Add to state
+        st.session_state.curr_state.nodes.append(new_node)
+        edge_id = f"{clicked_node.id}-{new_node_id}"
+        st.session_state.curr_state.edges.append(
+            StreamlitFlowEdge(edge_id, clicked_node.id, new_node_id, animated=True)
+        )
+
+    # 5) Mark as expanded
+    st.session_state.expanded_nodes.add(clicked_node.id)
+
+    # 6) Log the parent's question if not already
+    #    (So we can see which node was clicked in a table at the bottom.)
+    #    Avoid duplicates if user repeatedly clicks the same node (shouldn't happen with 'expanded_nodes', but just in case).
+    existing_paths = [q["section"] for q in st.session_state.clicked_questions]
+    if parent_path not in existing_paths:
+        st.session_state.clicked_questions.append({
+            "section": parent_path,
+            "short_label": clicked_node.data.get("short_label", clicked_node.data.get("content", parent_path)),
+            "full_question": parent_full_question
+        })
 
 def get_node_depth(node_id):
     return node_id.count("_")  # each underscore = one level deeper
-
-# ------------------- Mind Mapping Logic -------------------
-def add_children(parent_id):
-    depth = get_node_depth(parent_id) + 1
-    color = get_color_for_depth(depth)
-    count = sum(1 for n in st.session_state.curr_state.nodes if n.id.startswith(parent_id + "_"))
-    new_nodes = []
-    new_edges = []
-    for i in range(1, 5):
-        node_id = f"{parent_id}_{count+i}"
-        content = f"Node {node_id.split('_')[-1]}"
-        new_nodes.append(StreamlitFlowNode(
-            node_id,
-            (i, 0),
-            {"content": content},
-            "default", "right", "left",
-            style={"backgroundColor": color}
-        ))
-        new_edges.append(StreamlitFlowEdge(f"{parent_id}-{node_id}", parent_id, node_id, animated=True))
-        st.session_state.color_map[node_id] = color
-    st.session_state.curr_state.nodes.extend(new_nodes)
-    st.session_state.curr_state.edges.extend(new_edges)
-    st.session_state.expanded_nodes.add(parent_id)
 
 def reset_session_variables():
     # reset session state variables
@@ -146,12 +428,6 @@ def reset_session_variables():
     st.session_state["vision_result"] = None
     st.session_state["user_query"] = ""  # Clear the input field as well
     st.session_state["trigger_assistant"] = False
-
-def load_data(uploaded_file):
-    if uploaded_file is not None:
-        df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
-        return df
-    return None
 
 def to_base64(path_to_png):
     with open(path_to_png, "rb") as f:
@@ -221,95 +497,6 @@ Avoid making assumptions beyond what the data or chart shows.
     except Exception as e:
         return f"Error calling GPT-4 Vision endpoint: {e}"
 
-def generate_multiple_question_sets():
-    question_set_1 = get_list_questions()
-    question_set_2 = get_list_questions()
-    question_set_3 = get_list_questions()
-
-    return question_set_1, question_set_2, question_set_3
-
-def identify_common_questions(question_set_1, question_set_2, question_set_3):
-    """Uses AI to analyze the three sets and identify the most common questions."""
-    messages = [
-        {"role": "system", "content": f"""You are an expert data analyst assistant. Your task is to identify the most relevant and commonly occurring questions from three generated question sets.
-
-- Find the **most frequent** or **semantically similar** questions across the three sets.
-- Ensure a **balanced mix** of insights (time trends, correlations, distributions, categorical comparisons).
-- Avoid redundancy while keeping the most valuable questions.
-
-Here are the three sets of generated questions:
-Set 1:
-{question_set_1}
-
-Set 2:
-{question_set_2}
-
-Set 3:
-{question_set_3}
-
-Identify the **top 5 most relevant** questions based on frequency and analytical value."""},
-        {"role": "user",
-         "content": f"Here are the question sets:\n\nSet 1: {question_set_1}\nSet 2: {question_set_2}\nSet 3: {question_set_3}\n\nPlease provide the 5 most common and relevant questions."}
-    ]
-
-    try:
-        response = openai.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=messages,
-            max_tokens=800
-        )
-        common_questions = response.choices[0].message.content.strip().split("\n")
-        return [q.strip() for q in common_questions if q.strip()]
-
-    except Exception as e:
-        return [f"Error identifying common questions: {str(e)}"]
-
-def get_list_questions():
-    """ Generate a list of questions based on the uploaded dataset """
-    # Ensure we have metadata before proceeding
-    if "df_summary" not in st.session_state or st.session_state.df_summary is None:
-        return ["No dataset summary found. Please upload a dataset first."]
-
-    metadata = {
-        "columns": list(st.session_state.df_summary.columns),  # Extract column names
-        "summary": st.session_state.df_summary.to_dict(),  # Convert summary stats to a dictionary
-        "row_count": st.session_state.df.shape[0] if st.session_state.df is not None else 0
-    }
-
-    metadata_string = f"Columns: {', '.join(metadata['columns'])}\nTotal Rows: {metadata['row_count']}\nSummary Stats: {metadata['summary']}"
-
-    # Define chat messages format
-    messages = [
-        {"role": "system", "content": """You are a data analyst assistant that generates insightful and structured visualization questions based on dataset metadata. 
-
-- These questions must be optimized for use with the Pandas AI Smart DataFrame.
-- They should be **concise** and **direct**, avoiding overly descriptive or wordy phrasing.
-- Each question should focus on **specific relationships** or **trends** that can be effectively visualized.
-- Prioritize **correlation, distribution, time-based trends, and categorical comparisons** in the dataset.
-- Format them as a numbered list.
-
-Given the following dataset metadata:
-{metadata_string}
-
-Generate 5 structured questions that align with best practices in data analysis and visualization."""},
-        {"role": "user", "content": f"""Given this dataset metadata: {metadata_string}, generate 5 insightful data analysis questions."""}
-    ]
-
-    try:
-        response = openai.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=messages,
-            max_tokens=800
-        )
-
-        # return response.choices[0].message.content
-        questions = response.choices[0].message.content.strip().split("\n")
-
-        return (metadata_string, [q.strip() for q in questions if q.strip()])
-
-    except Exception as e:
-        return [f"Error generating questions: {str(e)}"]
-
 def get_assistant_interpretation(user_input, metadata):
     prompt = f"""
 *Reinterpret the user’s request into a clear, visualization-ready question that aligns with the dataset’s 
@@ -334,7 +521,7 @@ that can be represented using line charts, bar graphs, scatter plots, or heatmap
         response = openai.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a helpful data analysis assistant."},
+                {"role": "system", "content": "You are a helpful data analysis assistant designed to extract the core intent of the user query and form a high value prompt that can be used 100% of the time for pandasai for charting code. "},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=300,
@@ -457,8 +644,7 @@ class StreamlitResponse(ResponseParser):
 
 PAGE_OPTIONS = [
     'Data Upload',
-    'Mind Mapping V2',
-    'Mind Mapping V1',
+    'Tree Mapping V2',
     'Pandas Viz',
     "Code Editor",
     'Dashboard',
@@ -471,7 +657,7 @@ if __name__ == "__main__":
 
     if page == 'Data Upload':
         st.title('Upload your own Dataset!')
-        uploaded_file = st.file_uploader('Upload CSV and Excel Here', type=['csv', 'excel'])
+        uploaded_file = st.file_uploader('Upload CSV or Excel here', type=['csv', 'excel'])
 
         if uploaded_file is not None:
             # Load data into session state
@@ -484,6 +670,29 @@ if __name__ == "__main__":
                 # Save dataset name without extension
                 dataset_name = uploaded_file.name.rsplit('.', 1)[0]
                 st.session_state['dataset_name'] = dataset_name
+                st.write(dataset_name)
+
+                # Rebuild a 'metadata_string' for the root node
+                if st.session_state.df_summary is not None:
+                    # Basic example of turning summary + columns into a string
+                    cols = list(st.session_state.df_summary.columns)
+                    row_count = st.session_state.df.shape[0]
+                    st.session_state.metadata_string = (
+                        f"Columns: {cols}\n"
+                        f"Total Rows: {row_count}\n"
+                        f"Summary Stats:\n{st.session_state.df_summary}"
+                    )
+
+                    # Produce a one-sentence question describing the dataset
+                    root_question = generate_root_summary_question(st.session_state.metadata_string)
+
+                    # Update the root node's data if it exists:
+                    if st.session_state.curr_state.nodes:
+                        root_node = st.session_state.curr_state.nodes[0]
+                        root_node.data["full_question"] = root_question
+                        # Optionally display it on the node itself:
+                        root_node.data["content"] = "ROOT"  # or root_node.data["content"] = root_question
+                        root_node.data["short_label"] = "ROOT"
 
         # Display preview & summary if data exists
         if st.session_state.df is not None:
@@ -493,74 +702,96 @@ if __name__ == "__main__":
             st.write("### Data Summary")
             st.write(st.session_state.df_summary)
 
-    elif page == 'Mind Mapping V2':
-        st.title("🧠 Recursive Mind Map Explorer")
+    elif page == 'Tree Mapping V2':
+        st.title('Tree Mapping + OpenAI Ensemble')
 
-        # Check if dataset name is present and current root label is outdated
-        if st.session_state.get("dataset_name") and st.session_state.curr_state.nodes[0].data["content"] != \
-                st.session_state["dataset_name"]:
-            st.session_state.curr_state.nodes[0].data["content"] = st.session_state["dataset_name"]
+        # Sync root node label with updated dataset name if needed
+        if st.session_state.get("dataset_name"):
+            root_node = st.session_state.curr_state.nodes[0]
+            if root_node.data["content"] != st.session_state["dataset_name"]:
+                root_node.data["content"] = st.session_state["dataset_name"]
 
         col1, col2 = st.columns([3, 1])
         with col2:
             if st.button("🔄 Reset Mind Map"):
-                root = StreamlitFlowNode("root",
-                                         (0, 0),
-                                         {"content": st.session_state.dataset_name},
-                                         "default",
-                                         "right", style={"backgroundColor": "#FF6B6B"})
-                st.session_state.curr_state = StreamlitFlowState(nodes=[root], edges=[])
+                # Rebuild the root node
+                dataset_label = st.session_state.get("dataset_name", "Dataset")
+                new_root = StreamlitFlowNode(
+                    "S0",
+                    (0, 0),
+                    {
+                        "section_path": "S0",
+                        "short_label": "ROOT",
+                        "full_question": st.session_state.metadata_string,
+                        "content": dataset_label
+                    },
+                    "input",
+                    "right",
+                    style={"backgroundColor": COLOR_PALETTE[0]}
+                )
+                st.session_state.curr_state = StreamlitFlowState(nodes=[new_root], edges=[])
                 st.session_state.expanded_nodes = set()
-                st.session_state.color_map = {}
+                st.session_state.clicked_questions = []
                 st.rerun()
 
-        # Render recursive flow
+        # Render the flow
         st.session_state.curr_state = streamlit_flow(
             "mind_map",
             st.session_state.curr_state,
-            layout=RadialLayout(),
+            layout=TreeLayout(direction="right"),
             fit_view=True,
             height=550,
             get_node_on_click=True,
             enable_node_menu=True,
             enable_edge_menu=True,
-            show_minimap=True
+            show_minimap=False
         )
 
+        # If a node was clicked, expand it (if not already expanded)
         clicked_node_id = st.session_state.curr_state.selected_id
         if clicked_node_id and clicked_node_id not in st.session_state.expanded_nodes:
-            add_children(clicked_node_id)
+            # Find the corresponding node object
+            node_map = {n.id: n for n in st.session_state.curr_state.nodes}
+            clicked_node = node_map.get(clicked_node_id)
+            if clicked_node:
+                expand_node_with_questions(clicked_node)
             st.rerun()
 
-    elif page == 'Mind Mapping V1':
-        st.title('Mind Mapping + OpenAI Ensemble Completions')
-        st.write('Identify a category of the dataset you would like to explore.')
+        # Display a table of all clicked questions so far
+        if st.session_state.clicked_questions:
+            st.write("## Questions Clicked So Far")
+            df_log = pd.DataFrame(st.session_state.clicked_questions)
+            st.table(df_log)
 
-        # New Feature: Suggested Categories
-        st.write('### Suggested Questions')
-
-        if "question_list" not in st.session_state:
-            st.session_state["question_list"] = []
-
-        if st.button("Generate Most Relevant Questions"):
-            st.write("Generating multiple question sets...")
-
-            question_set_1, question_set_2, question_set_3 = generate_multiple_question_sets()
-            common_questions = identify_common_questions(question_set_1, question_set_2, question_set_3)
-
-            st.session_state["question_list"] = common_questions
-            print(st.session_state['question_list'])
-
-        st.write("### Most Relevant Questions:")
-        for idx, question in enumerate(st.session_state["question_list"]):
-            # Okay at this point we need to do some list/ string manipulation
-            if (question[0]) in ['1','2','3','4','5']:
-                if st.button(f" 🔍 {question}"):
-                    reset_session_variables()
-                    st.session_state["user_query"] = question
-                    st.session_state["trigger_assistant"] = True  # Ensure assistant runs
-            else:
-                st.write(f"{question}")
+    # elif page == 'Mind Mapping V1':
+    #     st.title('Mind Mapping + OpenAI Ensemble Completions')
+    #     st.write('Identify a category of the dataset you would like to explore.')
+    #
+    #     # New Feature: Suggested Categories
+    #     st.write('### Suggested Questions')
+    #
+    #     if "question_list" not in st.session_state:
+    #         st.session_state["question_list"] = []
+    #
+    #     if st.button("Generate Most Relevant Questions"):
+    #         st.write("Generating multiple question sets...")
+    #
+    #         question_set_1, question_set_2, question_set_3 = generate_multiple_question_sets()
+    #         common_questions = identify_common_questions(question_set_1, question_set_2, question_set_3)
+    #
+    #         st.session_state["question_list"] = common_questions
+    #         print(st.session_state['question_list'])
+    #
+    #     st.write("### Most Relevant Questions:")
+    #     for idx, question in enumerate(st.session_state["question_list"]):
+    #         # Okay at this point we need to do some list/ string manipulation
+    #         if (question[0]) in ['1','2','3','4','5']:
+    #             if st.button(f" 🔍 {question}"):
+    #                 reset_session_variables()
+    #                 st.session_state["user_query"] = question
+    #                 st.session_state["trigger_assistant"] = True  # Ensure assistant runs
+    #         else:
+    #             st.write(f"{question}")
 
     elif page == 'Pandas Viz':
 
