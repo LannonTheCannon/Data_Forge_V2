@@ -97,6 +97,13 @@ if "saved_charts" not in st.session_state:
     st.session_state['saved_charts'] = []
 if 'dataset_name' not in st.session_state:
     st.session_state['dataset_name'] = ""
+# For storing each node the user has clicked (to display full question)
+if "clicked_questions" not in st.session_state:
+    st.session_state.clicked_questions = []
+# For controlling repeated expansions
+if "expanded_nodes" not in st.session_state:
+    st.session_state.expanded_nodes = set()
+
 
 # ------------------- Color Setup -------------------
 COLOR_PALETTE = ["#FF6B6B", "#6BCB77", "#4D96FF", "#FFD93D", "#845EC2", "#F9A826"]
