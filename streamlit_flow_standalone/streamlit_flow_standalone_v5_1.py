@@ -4,9 +4,9 @@ from streamlit_flow.elements import StreamlitFlowNode, StreamlitFlowEdge
 from streamlit_flow.state import StreamlitFlowState
 from streamlit_flow.layouts import TreeLayout, RadialLayout, ManualLayout
 from uuid import uuid4
-import random
 import openai
 import pandas as pd
+import secrets
 
 st.set_page_config("Multi-Flow App", layout="wide")
 
@@ -290,7 +290,7 @@ def expand_node_with_questions(clicked_node):
 
         new_node = StreamlitFlowNode(
             new_node_id,
-            (random.randint(-100, 100), random.randint(-100, 100)),
+            (secrets.SystemRandom().randint(-100, 100), secrets.SystemRandom().randint(-100, 100)),
             {
                 "section_path": child_path,
                 "short_label": child_short_label,
@@ -480,7 +480,7 @@ elif page == "🎨 Flow Editor":
             new_id = str(uuid4())
             new_node = StreamlitFlowNode(
                 new_id,
-                (random.randint(0, 5), random.randint(0, 5)),
+                (secrets.SystemRandom().randint(0, 5), secrets.SystemRandom().randint(0, 5)),
                 {
                     "content": f'Node {len(st.session_state.curr_state.nodes) + 1}',
                     "section_path": new_id,
@@ -494,7 +494,7 @@ elif page == "🎨 Flow Editor":
     with col2:
         if st.button("➖ Delete Random Node"):
             if st.session_state.curr_state.nodes:
-                node = random.choice(st.session_state.curr_state.nodes)
+                node = secrets.choice(st.session_state.curr_state.nodes)
                 st.session_state.curr_state.nodes = [
                     n for n in st.session_state.curr_state.nodes if n.id != node.id
                 ]
@@ -508,8 +508,8 @@ elif page == "🎨 Flow Editor":
         if st.button("🔗 Add Random Edge"):
             nodes = st.session_state.curr_state.nodes
             if len(nodes) > 1:
-                s = random.choice(nodes)
-                t = random.choice(nodes)
+                s = secrets.choice(nodes)
+                t = secrets.choice(nodes)
                 if s.id != t.id:
                     new_edge = StreamlitFlowEdge(f"{s.id}-{t.id}", s.id, t.id, animated=True)
                     if not any(e.id == new_edge.id for e in st.session_state.curr_state.edges):
@@ -519,7 +519,7 @@ elif page == "🎨 Flow Editor":
     with col4:
         if st.button("❌ Delete Random Edge"):
             if st.session_state.curr_state.edges:
-                edge = random.choice(st.session_state.curr_state.edges)
+                edge = secrets.choice(st.session_state.curr_state.edges)
                 st.session_state.curr_state.edges = [
                     e for e in st.session_state.curr_state.edges if e.id != edge.id
                 ]
