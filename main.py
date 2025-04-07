@@ -81,6 +81,7 @@ if "curr_state" not in st.session_state:
     st.session_state.curr_state = StreamlitFlowState(nodes=[root_node], edges=[])
     st.session_state.expanded_nodes = set()
 
+
 if "chart_path" not in st.session_state:
     st.session_state.chart_path = None
 if 'editor_code' not in st.session_state:
@@ -416,8 +417,60 @@ def expand_node_with_questions(clicked_node):
             "full_question": parent_full_question
         })
 
+def expand_root_node(clicked_node):
+    # Hard-boiled coded list of the top-level EDA themes (DATA ARCHETYPES)
+
+    themes = [
+        ('Distributions', "#FF6B6B"),
+        ("Correlations", "#6BCB77"),
+        ("Missingness", "#4D96FF"),
+        ("Data Types", "#FFD93D")
+    ]
+
+    parent_path = clicked_node.data['section_path']
+
+    for i, (theme_label, color) in enumerate(themes):
+        child_id = f'{parent_path}.{i+1}'
+        new_node = StreamlitFlowNode(
+            child_id,
+            (random.randint(-100, 100), random.randint(-100, 100)),
+            {
+                "section_path": child_id,
+                "short_label": theme_label,
+                "full_question": "",  # We'll leave empty for now
+                "content": f"**{theme_label}**",
+                "node_type": "thematic"  # <-- Label these nodes as 'thematic'
+            },
+            "default",
+            "right",
+            "left",
+            style={"backgroundColor": color}
+        )
+
+        st.session_state.curr_state.nodes.append(new_node)
+
+        edge_id = f"{clicked_node.id}-{child_id}"
+        st.session_state.curr_state.edges.append(
+            StreamlitFlowEdge(edge_id, clicked_node.id, child_id, animated=True)
+        )
+
+        # Mark parent as expanded
+        st.session_state.expanded_nodes.add(clicked_node.id)
+
+        # log the parent's question if not already
+        parent_section = clicked_node.data["section_path"]
+        existing_paths = [q["section"] for q in st.session_state.clicked_questions]
+        if parent_section not in existing_paths:
+            st.session_state.clicked_questions.append({
+                "section": parent_section,
+                "short_label": clicked_node.data.get("short_label", "ROOT"),
+                "full_question": "Root node expanded"
+            })
+
 def get_node_depth(node_id):
     return node_id.count("_")  # each underscore = one level deeper
+
+# ------------------- Mind Mapping Logic -------------------
 
 def reset_session_variables():
     # reset session state variables
@@ -750,13 +803,17 @@ if __name__ == "__main__":
         # If a node was clicked, expand it (if not already expanded)
         clicked_node_id = st.session_state.curr_state.selected_id
         if clicked_node_id and clicked_node_id not in st.session_state.expanded_nodes:
-            # Find the corresponding node object
             node_map = {n.id: n for n in st.session_state.curr_state.nodes}
             clicked_node = node_map.get(clicked_node_id)
             if clicked_node:
-                expand_node_with_questions(clicked_node)
-            st.rerun()
+                node_type = clicked_node.data.get("node_type", "")
 
+                if node_type == "root":
+                    expand_root_node(clicked_node)
+                else:
+                    expand_node_with_questions(clicked_node)
+
+            st.rerun()
         # Display a table of all clicked questions so far
         if st.session_state.clicked_questions:
             st.write("## Questions Clicked So Far")
