@@ -8,3 +8,4 @@ seaborn
 scikit-learn
 streamlit-ace
 streamlit-elements
+streamlit-flow-component
