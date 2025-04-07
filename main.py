@@ -803,13 +803,17 @@ if __name__ == "__main__":
         # If a node was clicked, expand it (if not already expanded)
         clicked_node_id = st.session_state.curr_state.selected_id
         if clicked_node_id and clicked_node_id not in st.session_state.expanded_nodes:
-            # Find the corresponding node object
             node_map = {n.id: n for n in st.session_state.curr_state.nodes}
             clicked_node = node_map.get(clicked_node_id)
             if clicked_node:
-                expand_node_with_questions(clicked_node)
-            st.rerun()
+                node_type = clicked_node.data.get("node_type", "")
 
+                if node_type == "root":
+                    expand_root_node(clicked_node)
+                else:
+                    expand_node_with_questions(clicked_node)
+
+            st.rerun()
         # Display a table of all clicked questions so far
         if st.session_state.clicked_questions:
             st.write("## Questions Clicked So Far")
