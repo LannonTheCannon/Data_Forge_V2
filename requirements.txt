@@ -1,6 +1,6 @@
 streamlit
 pandas==1.5.3
-numpy==1.23.5
+numpy==1.26.4
 pandasai==1.4.10
 openai
 gdown
