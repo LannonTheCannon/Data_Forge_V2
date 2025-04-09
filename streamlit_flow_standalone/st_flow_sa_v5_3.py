@@ -212,7 +212,6 @@ if len(msgs.messages) == 0:
 if "chat_artifacts" not in st.session_state:
     st.session_state["chat_artifacts"] = {}
 
-
 def display_chat_history():
     """
     Renders the entire chat history along with any artifacts attached to messages.

@@ -5,7 +5,6 @@ langchain_openai
 langchain_experimental
 langgraph >= 0.2.74
 openai
-pandas
 sqlalchemy
 numpy==1.26.4
 plotly
@@ -15,3 +14,10 @@ xgboost
 psutil
 ai-data-science-team
 dtale
+pandasai==1.4.10
+pandas==1.5.3
+seaborn
+gdown
+streamlit-ace
+streamlit-elements
+streamlit-flow-component
