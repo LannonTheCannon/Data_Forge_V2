@@ -1,11 +1,17 @@
-streamlit
-pandas==1.5.3
-numpy==1.26.4
-pandasai==1.4.10
+openpyxl
+langchain
+langchain_community
+langchain_openai
+langchain_experimental
+langgraph >= 0.2.74
 openai
-gdown
-seaborn
+pandas
+sqlalchemy
+numpy==1.26.4
+plotly
+streamlit
 scikit-learn
-streamlit-ace
-streamlit-elements
-streamlit-flow-component
+xgboost
+psutil
+ai-data-science-team
+dtale

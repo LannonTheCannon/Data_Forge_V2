@@ -34,17 +34,16 @@ from uuid import uuid4
 # ------------------------------------------------------------------
 
 # Importing data science team stuff
-import streamlit.components.v1 as components
-from pathlib import Path
-import html
-
-from langchain_community.chat_message_histories import StreamlitChatMessageHistory
-from langchain_openai import ChatOpenAI
-
-from ai_data_science_team.ds_agents import EDAToolsAgent
-
-
-
+# import streamlit.components.v1 as components
+# from pathlib import Path
+# import html
+#
+# from langchain_community.chat_message_histories import StreamlitChatMessageHistory
+# from langchain_openai import ChatOpenAI
+#
+# from ai_data_science_team.ds_agents import EDAToolsAgent
+# from ai_data_science_team.utils.matplotlib import matplotlib_from_base64
+# from ai_data_science_team.utils.plotly import plotly_from_dict
 
 # ------------------------------
 # Streamlit Layout
@@ -65,8 +64,8 @@ layout = [
     # (element_identifier, x, y, w, h, additional_props...)
     dashboard.Item("first_item", 0, 0, 2, 2),  # Draggable & resizable by default
     dashboard.Item("second_item", 2, 0, 2, 2),  # Not draggable
-    dashboard.Item("third_item", 0, 2, 1, 1),    # Not resizable
-    dashboard.Item("chart_item", 4, 0, 3, 3)   # Our new chart card
+    dashboard.Item("third_item", 0, 2, 1, 1),  # Not resizable
+    dashboard.Item("chart_item", 4, 0, 3, 3)  # Our new chart card
 ]
 
 # ----------------- Color Palette ------------------
@@ -93,7 +92,6 @@ if "curr_state" not in st.session_state:
     )
     st.session_state.curr_state = StreamlitFlowState(nodes=[root_node], edges=[])
     st.session_state.expanded_nodes = set()
-
 
 if "chart_path" not in st.session_state:
     st.session_state.chart_path = None
@@ -132,9 +130,9 @@ if "clicked_questions" not in st.session_state:
 if "expanded_nodes" not in st.session_state:
     st.session_state.expanded_nodes = set()
 
-
 # ------------------- Color Setup -------------------
 COLOR_PALETTE = ["#FF6B6B", "#6BCB77", "#4D96FF", "#FFD93D", "#845EC2", "#F9A826"]
+
 
 # ------------------ STEP 1 DATA UPLOAD -------------------#
 def load_data(uploaded_file):
@@ -183,6 +181,7 @@ def generate_root_summary_question(metadata_string: str) -> str:
         # Fallback if there's an error
         return "What is the primary focus of this dataset?"
 
+
 def get_list_questions(context: str):
     """
     Generate 5 questions given the dataset metadata plus
@@ -223,12 +222,12 @@ def get_list_questions(context: str):
             - Each question should focus on **specific relationships** or **trends** that can be effectively visualized.
             - Prioritize **correlation, distribution, time-based trends, and categorical comparisons** in the dataset.
             - Format them as a numbered list.
-            
+
             Given the following dataset metadata:
             {metadata_string}
-            
+
             Generate 4 structured questions that align with best practices in data analysis and visualization. 
-            
+
             """
         },
         {
@@ -252,6 +251,7 @@ def get_list_questions(context: str):
     except Exception as e:
         return [f"Error generating questions: {str(e)}"]
 
+
 def generate_multiple_question_sets(parent_context: str):
     """
     Calls get_list_questions 3 times to create 3 sets of questions
@@ -261,6 +261,7 @@ def generate_multiple_question_sets(parent_context: str):
     q2 = get_list_questions(parent_context)
     q3 = get_list_questions(parent_context)
     return q1, q2, q3
+
 
 def identify_common_questions(question_set_1, question_set_2, question_set_3):
     """
@@ -300,6 +301,7 @@ def identify_common_questions(question_set_1, question_set_2, question_set_3):
     except Exception as e:
         return [f"Error identifying common questions: {str(e)}"]
 
+
 def paraphrase_questions(questions):
     """
     Paraphrase multiple questions into short labels or titles.
@@ -335,6 +337,7 @@ def paraphrase_questions(questions):
         # On error, just return the original questions
         return questions
 
+
 def get_section_path_children(parent_path: str, num_children=4):
     """
     Given a parent's section path like 'S0.1', produce a list:
@@ -346,6 +349,7 @@ def get_section_path_children(parent_path: str, num_children=4):
         children.append(new_path)
     return children
 
+
 def get_color_for_depth(section_path: str):
     """
     Depth = number of dots in the section path
@@ -354,6 +358,7 @@ def get_color_for_depth(section_path: str):
     """
     depth = section_path.count(".")
     return COLOR_PALETTE[depth % len(COLOR_PALETTE)]
+
 
 def expand_node_with_questions(clicked_node):
     """
@@ -430,6 +435,7 @@ def expand_node_with_questions(clicked_node):
             "full_question": parent_full_question
         })
 
+
 def expand_root_node(clicked_node):
     # Hard-boiled coded list of the top-level EDA themes (DATA ARCHETYPES)
 
@@ -443,7 +449,7 @@ def expand_root_node(clicked_node):
     parent_path = clicked_node.data['section_path']
 
     for i, (theme_label, color) in enumerate(themes):
-        child_id = f'{parent_path}.{i+1}'
+        child_id = f'{parent_path}.{i + 1}'
         new_node = StreamlitFlowNode(
             child_id,
             (random.randint(-100, 100), random.randint(-100, 100)),
@@ -480,6 +486,7 @@ def expand_root_node(clicked_node):
                 "full_question": "Root node expanded"
             })
 
+
 def get_node_depth(node_id):
     return node_id.count("_")  # each underscore = one level deeper
 
@@ -495,16 +502,19 @@ def reset_session_variables():
     st.session_state["user_query"] = ""  # Clear the input field as well
     st.session_state["trigger_assistant"] = False
 
+
 def to_base64(path_to_png):
     with open(path_to_png, "rb") as f:
         data = f.read()
     return base64.b64encode(data).decode("utf-8")
+
 
 def encode_image(image_path):
     with open(image_path, "rb") as image_file:
         encoded_str = base64.b64encode(image_file.read()).decode("utf-8")
         print("Base64 Image Length: ", len(encoded_str))
         return encoded_str
+
 
 def analyze_chart_with_openai(image_path, user_request, assistant_summary, code, meta):
     if not os.path.exists(image_path):
@@ -513,7 +523,7 @@ def analyze_chart_with_openai(image_path, user_request, assistant_summary, code,
     base64_image = encode_image(image_path)
     uploaded_image_url = f'file://{image_path}'
 
-#4) Provide next steps or insights.
+    # 4) Provide next steps or insights.
 
     combined_prompt = f"""    
 You are an expert data analyst with additional chart context and metadata based on the actual dataset provided
@@ -539,7 +549,7 @@ Avoid making assumptions beyond what the data or chart shows.
 """
     try:
         response = openai.chat.completions.create(
-            model="gpt-4o-mini",   # or "gpt-4" if you have access
+            model="gpt-4o-mini",  # or "gpt-4" if you have access
             messages=[
                 {"role": "system", "content": """"✅ 
     **Explicitly defines what 0 and 1 mean** → No assumptions.  
@@ -547,7 +557,7 @@ Avoid making assumptions beyond what the data or chart shows.
 ✅ **Uses generated code and dataset query as extra context** → Aligns with PandasAI’s output.  
 ✅ **Includes clear analysis steps** → Guides GPT-4 to focus on key aspects."}
 """},
-            {
+                {
                     "role": "user",
                     "content": [
                         {"type": "text", "text": f"{combined_prompt}\n\nNow, analyze the attached image."},
@@ -562,6 +572,7 @@ Avoid making assumptions beyond what the data or chart shows.
         return response.choices[0].message.content
     except Exception as e:
         return f"Error calling GPT-4 Vision endpoint: {e}"
+
 
 def get_assistant_interpretation(user_input, metadata):
     prompt = f"""
@@ -587,7 +598,8 @@ that can be represented using line charts, bar graphs, scatter plots, or heatmap
         response = openai.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a helpful data analysis assistant designed to extract the core intent of the user query and form a high value prompt that can be used 100% of the time for pandasai for charting code. "},
+                {"role": "system",
+                 "content": "You are a helpful data analysis assistant designed to extract the core intent of the user query and form a high value prompt that can be used 100% of the time for pandasai for charting code. "},
                 {"role": "user", "content": prompt}
             ],
             max_tokens=300,
@@ -601,9 +613,11 @@ that can be represented using line charts, bar graphs, scatter plots, or heatmap
         st.warning(f"Error in get_assistant_interpretation: {e}")
         return "Could not interpret user request."
 
+
 def handle_layout_change(updated_layout):
     st.session_state['dashboard_layout'] = updated_layout
     print("Updated layout in the app:", updated_layout)  # Goes to the app UI
+
 
 def show_dashboard():
     # If dashboard layout exists in session state, use it;
@@ -660,6 +674,7 @@ def show_dashboard():
                     else:
                         mui.Typography('Chart file not found')
 
+
 class StreamlitCallback(BaseCallback):
     def __init__(self, code_container, response_container) -> None:
         self.code_container = code_container
@@ -672,6 +687,7 @@ class StreamlitCallback(BaseCallback):
 
     def get_generated_code(self):
         return self.generated_code
+
 
 class StreamlitResponse(ResponseParser):
     def __init__(self, context) -> None:
@@ -707,6 +723,7 @@ class StreamlitResponse(ResponseParser):
     def format_other(self, result):
         st.markdown(f"### 📌 AI Insight\n\n{result['value']}")
         st.session_state.chart_generated = False
+
 
 PAGE_OPTIONS = [
     'Data Upload',
@@ -896,7 +913,7 @@ if __name__ == "__main__":
             combined_prompt = f"""
         User wants the following analysis (summarized):
         {interpretation}
-        
+
         Now please create a plot or data analysis responding to the user request:
         {new_user_query}
         """
@@ -907,7 +924,7 @@ if __name__ == "__main__":
             response_container = st.container()
             code_callback = StreamlitCallback(code_container, response_container)
 
-            #response_parser = StreamlitResponse()
+            # response_parser = StreamlitResponse()
 
             llm = PandasOpenAI(api_token=st.secrets["OPENAI_API_KEY"])  # or a different LLM if desired
             # client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
@@ -976,7 +993,8 @@ if __name__ == "__main__":
             if run_button:
                 try:
                     exec_locals = {}
-                    exec(st.session_state.editor_code, {"df": st.session_state.df, "pd": pd, "plt": plt, "st": st, "sns": sns, "np": np},
+                    exec(st.session_state.editor_code,
+                         {"df": st.session_state.df, "pd": pd, "plt": plt, "st": st, "sns": sns, "np": np},
                          exec_locals)
 
                     if "analyze_data" in exec_locals:
@@ -1002,6 +1020,7 @@ if __name__ == "__main__":
                     if st.button("💾 Save Chart to Dashboard"):
                         if st.session_state.chart_path and os.path.exists(st.session_state.chart_path):
                             import datetime
+
                             # generate a unique filename using the current timestamp
                             timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                             new_filename = f'chart_{timestamp}.png'

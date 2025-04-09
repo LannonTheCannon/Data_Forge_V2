@@ -13,7 +13,7 @@ import streamlit.components.v1 as components
 import pandas as pd
 from pathlib import Path
 import html
-import sweetviz
+
 from langchain_community.chat_message_histories import StreamlitChatMessageHistory
 from langchain_openai import ChatOpenAI
 
@@ -21,11 +21,102 @@ from ai_data_science_team.ds_agents import EDAToolsAgent
 from ai_data_science_team.utils.matplotlib import matplotlib_from_base64
 from ai_data_science_team.utils.plotly import plotly_from_dict
 
+# Helpers
+
+
+def render_report_iframe(
+    report_src, src_type="url", height=620, title="Interactive Report"):
+    """
+    Render a report iframe with expandable fullscreen functionality.
+
+    Parameters:
+    ----------
+    report_src : str
+        Either the URL of the report (for src_type='url') or the raw HTML (for src_type='html').
+
+    src_type : str
+        Type of the source: 'url' or 'html'.
+
+    height : int
+        Height of the iframe component.
+    """
+
+    if src_type == "html":
+        iframe_src = f'srcdoc="{html.escape(report_src, quote=True)}"'
+    else:
+        iframe_src = f'src="{report_src}"'
+
+    html_code = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <title>{title}</title>
+        <style>
+            body, html {{
+                margin: 0;
+                padding: 0;
+                height: 100%;
+            }}
+            #iframe-container {{
+                position: relative;
+                width: 100%;
+                height: {height}px;
+            }}
+            #myIframe {{
+                width: 100%;
+                height: 100%;
+                border: none;
+            }}
+            #fullscreen-btn {{
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                z-index: 1000;
+                padding: 8px 12px;
+                background-color: #007bff;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+            }}
+        </style>
+    </head>
+    <body>
+        <div id="iframe-container">
+            <button id="fullscreen-btn" onclick="toggleFullscreen()">Full Screen</button>
+            <iframe id="myIframe" {iframe_src} allowfullscreen></iframe>
+        </div>
+        <script>
+            function toggleFullscreen() {{
+                var container = document.getElementById("iframe-container");
+                if (!document.fullscreenElement) {{
+                    container.requestFullscreen().catch(err => {{
+                        alert("Error attempting to enable full-screen mode: " + err.message);
+                    }});
+                    document.getElementById("fullscreen-btn").innerText = "Exit Full Screen";
+                }} else {{
+                    document.exitFullscreen();
+                    document.getElementById("fullscreen-btn").innerText = "Full Screen";
+                }}
+            }}
+            document.addEventListener('fullscreenchange', () => {{
+                if (!document.fullscreenElement) {{
+                    document.getElementById("fullscreen-btn").innerText = "Full Screen";
+                }}
+            }});
+        </script>
+    </body>
+    </html>
+    """
+    components.html(html_code, height=height, scrolling=True)
+
+
 # =============================================================================
 # STREAMLIT APP SETUP (including data upload, API key, etc.)
 # =============================================================================
 
-MODEL_LIST = ['gpt-4o-mini', 'gpt-4o']
+MODEL_LIST = ["gpt-4o-mini", "gpt-4o"]
 TITLE = "Your Exploratory Data Analysis (EDA) Copilot"
 st.set_page_config(page_title=TITLE, page_icon="📊")
 st.title("📊 " + TITLE)
@@ -47,6 +138,7 @@ with st.expander("Example Questions", expanded=False):
         - Analyze missing data in the dataset.
         - Generate a correlation funnel. Use the Churn feature as the target.
         - Generate a Sweetviz report for the dataset. Use the Churn feature as the target.
+        - Generate a Dtale report for the dataset.
         """
     )
 
@@ -67,13 +159,17 @@ if use_demo_data:
         st.write(f"## Preview of {file_name} data:")
         st.dataframe(st.session_state["DATA_RAW"])
     else:
-        st.error(f"Demo data file not found at {demo_file_path}. Please ensure it exists.")
+        st.error(
+            f"Demo data file not found at {demo_file_path}. Please ensure it exists."
+        )
 else:
-    uploaded_file = st.sidebar.file_uploader("Upload CSV or Excel file", type=["csv", "xlsx"])
+    uploaded_file = st.sidebar.file_uploader(
+        "Upload CSV or Excel file", type=["csv", "xlsx"]
+    )
     if uploaded_file:
-        if uploaded_file.name.endswith('.csv'):
+        if uploaded_file.name.endswith(".csv"):
             df = pd.read_csv(uploaded_file)
-        elif uploaded_file.name.endswith('.xlsx'):
+        elif uploaded_file.name.endswith(".xlsx"):
             df = pd.read_excel(uploaded_file)
         st.session_state["DATA_RAW"] = df.copy()
         file_name = Path(uploaded_file.name).stem
@@ -87,7 +183,7 @@ st.sidebar.header("Enter your OpenAI API Key")
 st.session_state["OPENAI_API_KEY"] = st.sidebar.text_input(
     "API Key",
     type="password",
-    help="Your OpenAI API key is required for the app to function."
+    help="Your OpenAI API key is required for the app to function.",
 )
 
 if st.session_state["OPENAI_API_KEY"]:
@@ -102,10 +198,7 @@ else:
     st.stop()
 
 model_option = st.sidebar.selectbox("Choose OpenAI model", MODEL_LIST, index=0)
-OPENAI_LLM = ChatOpenAI(
-    model=model_option,
-    api_key=st.session_state["OPENAI_API_KEY"]
-)
+OPENAI_LLM = ChatOpenAI(model=model_option, api_key=st.session_state["OPENAI_API_KEY"])
 llm = OPENAI_LLM
 
 # =============================================================================
@@ -128,7 +221,10 @@ def display_chat_history():
     for i, msg in enumerate(msgs.messages):
         with st.chat_message(msg.type):
             st.write(msg.content)
-            if "chat_artifacts" in st.session_state and i in st.session_state["chat_artifacts"]:
+            if (
+                "chat_artifacts" in st.session_state
+                and i in st.session_state["chat_artifacts"]
+            ):
                 for artifact in st.session_state["chat_artifacts"][i]:
                     with st.expander(artifact["title"], expanded=True):
                         if artifact["render_type"] == "dataframe":
@@ -145,72 +241,22 @@ def display_chat_history():
                             except Exception as e:
                                 st.error(f"Could not open report file: {e}")
                                 report_html = "<h1>Report not found</h1>"
-                            report_html_escaped = html.escape(report_html, quote=True)
-                            html_code = f"""
-                            <!DOCTYPE html>
-                            <html>
-                            <head>
-                            <meta charset="utf-8">
-                            <title>Sweetviz Report</title>
-                            <style>
-                                body, html {{
-                                margin: 0;
-                                padding: 0;
-                                height: 100%;
-                                }}
-                                #iframe-container {{
-                                position: relative;
-                                width: 100%;
-                                height: 600px;
-                                }}
-                                #myIframe {{
-                                width: 100%;
-                                height: 100%;
-                                border: none;
-                                }}
-                                #fullscreen-btn {{
-                                position: absolute;
-                                top: 10px;
-                                right: 10px;
-                                z-index: 1000;
-                                padding: 8px 12px;
-                                background-color: #007bff;
-                                color: white;
-                                border: none;
-                                border-radius: 4px;
-                                cursor: pointer;
-                                }}
-                            </style>
-                            </head>
-                            <body>
-                            <div id="iframe-container">
-                                <button id="fullscreen-btn" onclick="toggleFullscreen()">Full Screen</button>
-                                <iframe id="myIframe" srcdoc="{report_html_escaped}" allowfullscreen></iframe>
-                            </div>
-                            <script>
-                                function toggleFullscreen() {{
-                                var container = document.getElementById("iframe-container");
-                                if (!document.fullscreenElement) {{
-                                    container.requestFullscreen().catch(err => {{
-                                    alert("Error attempting to enable full-screen mode: " + err.message);
-                                    }});
-                                    document.getElementById("fullscreen-btn").innerText = "Exit Full Screen";
-                                }} else {{
-                                    document.exitFullscreen();
-                                    document.getElementById("fullscreen-btn").innerText = "Full Screen";
-                                }}
-                                }}
 
-                                document.addEventListener('fullscreenchange', () => {{
-                                if (!document.fullscreenElement) {{
-                                    document.getElementById("fullscreen-btn").innerText = "Full Screen";
-                                }}
-                                }});
-                            </script>
-                            </body>
-                            </html>
-                            """
-                            components.html(html_code, height=620)
+                            render_report_iframe(
+                                report_html,
+                                src_type="html",
+                                height=620,
+                                title="Sweetviz Report",
+                            )
+                        elif artifact["render_type"] == "dtale":
+                            dtale_url = artifact["data"]["dtale_url"]
+                            render_report_iframe(
+                                dtale_url,
+                                src_type="url",
+                                height=620,
+                                title="Dtale Report",
+                            )
+
                         else:
                             st.write("Artifact of unknown type.")
 
@@ -218,6 +264,7 @@ def display_chat_history():
 # =============================================================================
 # PROCESS AGENTS AND ARTIFACTS
 # =============================================================================
+
 
 def process_exploratory(question: str, llm, data: pd.DataFrame) -> dict:
     """
@@ -243,7 +290,7 @@ def process_exploratory(question: str, llm, data: pd.DataFrame) -> dict:
     result = {
         "ai_message": ai_message,
         "tool_calls": tool_calls,
-        "artifacts": artifacts
+        "artifacts": artifacts,
     }
 
     if tool_calls:
@@ -276,7 +323,7 @@ def process_exploratory(question: str, llm, data: pd.DataFrame) -> dict:
                 except Exception as e:
                     st.error(f"Error processing visualize_missing artifact: {e}")
 
-        elif tool_name == "correlation_funnel":
+        elif tool_name == "generate_correlation_funnel":
             if artifacts and isinstance(artifacts, dict):
                 if "correlation_data" in artifacts:
                     try:
@@ -289,13 +336,18 @@ def process_exploratory(question: str, llm, data: pd.DataFrame) -> dict:
                         corr_plotly = plotly_from_dict(artifacts["plotly_figure"])
                         result["correlation_plotly"] = corr_plotly
                     except Exception as e:
-                        st.error(f"Error processing correlation funnel Plotly figure: {e}")
+                        st.error(
+                            f"Error processing correlation funnel Plotly figure: {e}"
+                        )
 
         elif tool_name == "generate_sweetviz_report":
             if artifacts and isinstance(artifacts, dict):
-                st.write('Artifacts', artifacts)
                 result["report_file"] = artifacts.get("report_file")
                 result["report_html"] = artifacts.get("report_html")
+
+        elif tool_name == "generate_dtale_report":
+            if artifacts and isinstance(artifacts, dict):
+                result["dtale_url"] = artifacts.get("dtale_url")
 
         else:
             if artifacts and isinstance(artifacts, dict):
@@ -338,11 +390,7 @@ if st.session_state["DATA_RAW"] is not None:
         with st.spinner("Thinking..."):
             # Add the user's question to the message history
             msgs.add_user_message(question)
-            result = process_exploratory(
-                question,
-                llm,
-                st.session_state["DATA_RAW"]
-            )
+            result = process_exploratory(question, llm, st.session_state["DATA_RAW"])
 
             tool_name = None
             if "last_tool_call" in result:
@@ -361,73 +409,106 @@ if st.session_state["DATA_RAW"] is not None:
                 tool_name = result["last_tool_call"]
                 if tool_name == "describe_dataset":
                     if "describe_df" in result:
-                        artifact_list.append({
-                            "title": "Dataset Description",
-                            "render_type": "dataframe",
-                            "data": result["describe_df"]
-                        })
+                        artifact_list.append(
+                            {
+                                "title": "Dataset Description",
+                                "render_type": "dataframe",
+                                "data": result["describe_df"],
+                            }
+                        )
                 elif tool_name == "visualize_missing":
                     if "matrix_plot_fig" in result:
-                        artifact_list.append({
-                            "title": "Missing Data Matrix",
-                            "render_type": "matplotlib",
-                            "data": result["matrix_plot_fig"]
-                        })
+                        artifact_list.append(
+                            {
+                                "title": "Missing Data Matrix",
+                                "render_type": "matplotlib",
+                                "data": result["matrix_plot_fig"],
+                            }
+                        )
                     if "bar_plot_fig" in result:
-                        artifact_list.append({
-                            "title": "Missing Data Bar Plot",
-                            "render_type": "matplotlib",
-                            "data": result["bar_plot_fig"]
-                        })
+                        artifact_list.append(
+                            {
+                                "title": "Missing Data Bar Plot",
+                                "render_type": "matplotlib",
+                                "data": result["bar_plot_fig"],
+                            }
+                        )
                     if "heatmap_plot_fig" in result:
-                        artifact_list.append({
-                            "title": "Missing Data Heatmap",
-                            "render_type": "matplotlib",
-                            "data": result["heatmap_plot_fig"]
-                        })
-                elif tool_name == "correlation_funnel":
+                        artifact_list.append(
+                            {
+                                "title": "Missing Data Heatmap",
+                                "render_type": "matplotlib",
+                                "data": result["heatmap_plot_fig"],
+                            }
+                        )
+                elif tool_name == "generate_correlation_funnel":
                     if "correlation_data" in result:
-                        artifact_list.append({
-                            "title": "Correlation Data",
-                            "render_type": "dataframe",
-                            "data": result["correlation_data"]
-                        })
+                        artifact_list.append(
+                            {
+                                "title": "Correlation Data",
+                                "render_type": "dataframe",
+                                "data": result["correlation_data"],
+                            }
+                        )
                     if "correlation_plotly" in result:
-                        artifact_list.append({
-                            "title": "Correlation Funnel (Interactive Plotly)",
-                            "render_type": "plotly",
-                            "data": result["correlation_plotly"]
-                        })
+                        artifact_list.append(
+                            {
+                                "title": "Correlation Funnel (Interactive Plotly)",
+                                "render_type": "plotly",
+                                "data": result["correlation_plotly"],
+                            }
+                        )
                 elif tool_name == "generate_sweetviz_report":
-                    artifact_list.append({
-                        "title": "Sweetviz Report",
-                        "render_type": "sweetviz",
-                        "data": {"report_file": result.get("report_file"), "report_html": result.get("report_html")}
-                    })
+                    artifact_list.append(
+                        {
+                            "title": "Sweetviz Report",
+                            "render_type": "sweetviz",
+                            "data": {
+                                "report_file": result.get("report_file"),
+                                "report_html": result.get("report_html"),
+                            },
+                        }
+                    )
+                elif tool_name == "generate_dtale_report":
+                    artifact_list.append(
+                        {
+                            "title": "Dtale Interactive Report",
+                            "render_type": "dtale",
+                            "data": {"dtale_url": result.get("dtale_url")},
+                        }
+                    )
+
                 else:
                     if "plotly_fig" in result:
-                        artifact_list.append({
-                            "title": "Plotly Figure",
-                            "render_type": "plotly",
-                            "data": result["plotly_fig"]
-                        })
+                        artifact_list.append(
+                            {
+                                "title": "Plotly Figure",
+                                "render_type": "plotly",
+                                "data": result["plotly_fig"],
+                            }
+                        )
                     if "matplotlib_fig" in result:
-                        artifact_list.append({
-                            "title": "Matplotlib Figure",
-                            "render_type": "matplotlib",
-                            "data": result["matplotlib_fig"]
-                        })
+                        artifact_list.append(
+                            {
+                                "title": "Matplotlib Figure",
+                                "render_type": "matplotlib",
+                                "data": result["matplotlib_fig"],
+                            }
+                        )
                     if "dataframe" in result:
-                        artifact_list.append({
-                            "title": "Dataframe",
-                            "render_type": "dataframe",
-                            "data": result["dataframe"]
-                        })
+                        artifact_list.append(
+                            {
+                                "title": "Dataframe",
+                                "render_type": "dataframe",
+                                "data": result["dataframe"],
+                            }
+                        )
 
             # Attach artifacts to the most recent AI message (so they show immediately)
             if artifact_list:
                 msg_index = len(msgs.messages) - 1
                 st.session_state["chat_artifacts"][msg_index] = artifact_list
+
 
 # =============================================================================
 # FINAL RENDER: DISPLAY THE COMPLETE CHAT HISTORY WITH ARTIFACTS
