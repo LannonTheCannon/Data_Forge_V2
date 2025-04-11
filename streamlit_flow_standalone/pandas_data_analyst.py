@@ -5,6 +5,7 @@ import streamlit as st
 import pandas as pd
 import plotly.io as pio
 import json
+from IPython.display import Markdown
 
 from langchain_community.chat_message_histories import StreamlitChatMessageHistory
 from langchain_openai import ChatOpenAI
