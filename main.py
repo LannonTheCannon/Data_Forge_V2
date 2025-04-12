@@ -888,17 +888,16 @@ def display_chat_history():
             if i in st.session_state["chat_artifacts"]:
                 for artifact in st.session_state["chat_artifacts"][i]:
                     with st.expander(f"📎 {artifact['title']}", expanded=True):
-                        if artifact["render_type"] == "plotly":
-                            st.plotly_chart(artifact["data"])
-                        elif artifact["render_type"] == "dataframe":
-                            st.dataframe(artifact["data"])
-                        else:
-                            st.write("Unknown artifact type.")
-
-                        # ✅ Display code used to generate artifact
-                        if "code" in artifact and artifact["code"]:
-                            with st.expander("💻 Code used"):
-                                st.code(artifact["code"], language="python")
+                        tabs = st.tabs(["📊 Output", "💻 Code"])
+                        with tabs[0]:
+                            if artifact["render_type"] == "plotly":
+                                st.plotly_chart(artifact["data"])
+                            elif artifact["render_type"] == "dataframe":
+                                st.dataframe(artifact["data"])
+                            else:
+                                st.write("Unknown artifact type.")
+                        with tabs[1]:
+                            st.code(artifact.get("code", "# No code available"), language="python")
 
 def process_exploratory(question: str, llm, data: pd.DataFrame) -> dict:
     """
@@ -1296,7 +1295,7 @@ if __name__ == "__main__":
                             "title": "Chart",
                             "render_type": "plotly",
                             "data": plot_obj,
-                            'code': result.get('code_used')
+                            'code': result.get('data_visualization_function')
                         })
 
                     elif route == "table":
@@ -1307,7 +1306,7 @@ if __name__ == "__main__":
                                 "title": "Table",
                                 "render_type": "dataframe",
                                 "data": df,
-                                'code': result.get('code_used')
+                                'code': result.get('data_wrangler_function')
                             })
 
                 except Exception as e:
