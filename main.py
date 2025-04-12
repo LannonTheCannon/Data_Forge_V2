@@ -14,6 +14,7 @@ import inspect
 from streamlit_elements import elements, dashboard, mui, html
 # from data import load_data
 from resources.documentation_page_1 import documentation_page
+import json
 # ------------------------------
 # PandasAI + Callbacks
 # ------------------------------
@@ -42,6 +43,9 @@ from langchain_openai import ChatOpenAI
 from ai_data_science_team.ds_agents import EDAToolsAgent
 from ai_data_science_team.utils.matplotlib import matplotlib_from_base64
 from ai_data_science_team.utils.plotly import plotly_from_dict
+
+from ai_data_science_team import PandasDataAnalyst, DataWranglingAgent, DataVisualizationAgent
+
 
 # ------------------------------
 # Streamlit Layout
@@ -130,6 +134,10 @@ if "expanded_nodes" not in st.session_state:
     st.session_state.expanded_nodes = set()
 if "DATA_RAW" not in st.session_state:
     st.session_state["DATA_RAW"] = None
+if 'plots' not in st.session_state:
+    st.session_state.plots = []
+if 'dataframes' not in st.session_state:
+    st.session_state.dataframes = []
 
 
 # ------------------- Color Setup -------------------
@@ -795,58 +803,102 @@ def render_report_iframe(report_src, src_type="url", height=620, title="Interact
     """
     components.html(html_code, height=height, scrolling=True)
 
-
-def display_chat_history():
-    """
-    Renders the entire chat history along with any artifacts attached to messages.
-    Artifacts (e.g., plots, dataframes, Sweetviz reports) are rendered inside expanders.
-    """
-    for i, msg in enumerate(msgs.messages):
-        with st.chat_message(msg.type):
-            st.write(msg.content)
-            if (
-                    "chat_artifacts" in st.session_state
-                    and i in st.session_state["chat_artifacts"]
-            ):
-                for artifact in st.session_state["chat_artifacts"][i]:
-                    with st.expander(artifact["title"], expanded=True):
-                        if artifact["render_type"] == "dataframe":
-                            st.dataframe(artifact["data"])
-                        elif artifact["render_type"] == "matplotlib":
-                            st.pyplot(artifact["data"])
-                        elif artifact["render_type"] == "plotly":
-                            st.plotly_chart(artifact["data"])
-                        elif artifact["render_type"] == "sweetviz":
-                            report_file = artifact["data"].get("report_file")
-                            try:
-                                with open(report_file, "r", encoding="utf-8") as f:
-                                    report_html = f.read()
-                            except Exception as e:
-                                st.error(f"Could not open report file: {e}")
-                                report_html = "<h1>Report not found</h1>"
-
-                            render_report_iframe(
-                                report_html,
-                                src_type="html",
-                                height=620,
-                                title="Sweetviz Report",
-                            )
-                        elif artifact["render_type"] == "dtale":
-                            dtale_url = artifact["data"]["dtale_url"]
-                            render_report_iframe(
-                                dtale_url,
-                                src_type="url",
-                                height=620,
-                                title="Dtale Report",
-                            )
-
-                        else:
-                            st.write("Artifact of unknown type.")
+# Display chat history for EDA Tools Agent
+# def display_chat_history():
+#     """
+#     Renders the entire chat history along with any artifacts attached to messages.
+#     Artifacts (e.g., plots, dataframes, Sweetviz reports) are rendered inside expanders.
+#     """
+#     for i, msg in enumerate(msgs.messages):
+#         with st.chat_message(msg.type):
+#             st.write(msg.content)
+#             if (
+#                     "chat_artifacts" in st.session_state
+#                     and i in st.session_state["chat_artifacts"]
+#             ):
+#                 for artifact in st.session_state["chat_artifacts"][i]:
+#                     with st.expander(artifact["title"], expanded=True):
+#                         if artifact["render_type"] == "dataframe":
+#                             st.dataframe(artifact["data"])
+#                         elif artifact["render_type"] == "matplotlib":
+#                             st.pyplot(artifact["data"])
+#                         elif artifact["render_type"] == "plotly":
+#                             st.plotly_chart(artifact["data"])
+#                         elif artifact["render_type"] == "sweetviz":
+#                             report_file = artifact["data"].get("report_file")
+#                             try:
+#                                 with open(report_file, "r", encoding="utf-8") as f:
+#                                     report_html = f.read()
+#                             except Exception as e:
+#                                 st.error(f"Could not open report file: {e}")
+#                                 report_html = "<h1>Report not found</h1>"
+#
+#                             render_report_iframe(
+#                                 report_html,
+#                                 src_type="html",
+#                                 height=620,
+#                                 title="Sweetviz Report",
+#                             )
+#                         elif artifact["render_type"] == "dtale":
+#                             dtale_url = artifact["data"]["dtale_url"]
+#                             render_report_iframe(
+#                                 dtale_url,
+#                                 src_type="url",
+#                                 height=620,
+#                                 title="Dtale Report",
+#                             )
+#
+#                         else:
+#                             st.write("Artifact of unknown type.")
 
 # =============================================================================
 # PROCESS AGENTS AND ARTIFACTS
 # =============================================================================
 
+# Display Chat history for Pandas Data Analyst
+
+# def display_chat_history():
+#     for msg in msgs.messages:
+#         with st.chat_message(msg.type):
+#             # Splitting the content and fetching the correct plotly chart
+#             if "PLOT_INDEX:" in msg.content:
+#                 plot_index = int(msg.content.split("PLOT_INDEX:")[1])
+#                 st.plotly_chart(
+#                     st.session_state.plots[plot_index], key=f"history_plot_{plot_index}"
+#                 )
+#
+#             # Getting the content and fetching the correct dataframe
+#             elif "DATAFRAME_INDEX:" in msg.content:
+#                 df_index = int(msg.content.split("DATAFRAME_INDEX:")[1])
+#                 st.dataframe(
+#                     st.session_state.dataframes[df_index],
+#                     key=f"history_dataframe_{df_index}",
+#                 )
+#             else:
+#                 st.write(msg.content)
+
+def display_chat_history():
+    if "chat_artifacts" not in st.session_state:
+        st.session_state["chat_artifacts"] = {}
+
+    for i, msg in enumerate(msgs.messages):
+        role_label = "User" if msg.type == "human" else "Assistant"
+        with st.chat_message(msg.type):
+            st.markdown(f"**{role_label}:** {msg.content}")
+            if i in st.session_state["chat_artifacts"]:
+                for artifact in st.session_state["chat_artifacts"][i]:
+                    with st.expander(f"📎 {artifact['title']}", expanded=True):
+                        if artifact["render_type"] == "plotly":
+                            st.plotly_chart(artifact["data"])
+                        elif artifact["render_type"] == "dataframe":
+                            st.dataframe(artifact["data"])
+                        else:
+                            st.write("Unknown artifact type.")
+
+                        # ✅ Display code used to generate artifact
+                        if "code" in artifact and artifact["code"]:
+                            with st.expander("💻 Code used"):
+                                st.code(artifact["code"], language="python")
 
 def process_exploratory(question: str, llm, data: pd.DataFrame) -> dict:
     """
@@ -956,11 +1008,10 @@ def process_exploratory(question: str, llm, data: pd.DataFrame) -> dict:
 
     return result
 
-
-
 PAGE_OPTIONS = [
     'Data Upload',
-    'AI Assistance',
+    # 'EDA Tools Agent',
+    'Data Analyst',
     'Tree Mapping V2',
     'Pandas Viz',
     "Code Editor",
@@ -1020,182 +1071,250 @@ if __name__ == "__main__":
             st.write("### Data Summary")
             st.write(st.session_state.df_summary)
 
-    elif page == 'AI Assistance':
-        MODEL_LIST = ["gpt-4o-mini", "gpt-4o"]
-        TITLE = "Your Exploratory Data Analysis (EDA) Copilot"
-        st.title('📊 '+TITLE)
+#     elif page == 'EDA Tools Agent':
+#         MODEL_LIST = ["gpt-4o-mini", "gpt-4o"]
+#         TITLE = "Your Exploratory Data Analysis (EDA) Copilot"
+#         st.title('📊 '+TITLE)
+#
+#         st.markdown("""
+# Welcome to the EDA Copilot. This AI agent is designed to help you find and load data
+# and return exploratory analysis reports that can be used to understand the data
+# prior to other analysis (e.g. modeling, feature engineering, etc).
+# """)
+#         with st.expander("Example Questions", expanded=False):
+#             st.write(
+#                 """
+#                 - What tools do you have access to? Return a table.
+#                 - Give me information on the correlation funnel tool.
+#                 - Explain the dataset.
+#                 - What do the first 5 rows contain?
+#                 - Describe the dataset.
+#                 - Analyze missing data in the dataset.
+#                 - Generate a correlation funnel. Use the Churn feature as the target.
+#                 - Generate a Sweetviz report for the dataset. Use the Churn feature as the target.
+#                 - Generate a Dtale report for the dataset.
+#                 """
+#             )
+#
+#         # Use OpenAI LLM from secrets
+#         OPENAI_LLM = ChatOpenAI(
+#             model=st.sidebar.selectbox("Choose OpenAI model", MODEL_LIST, index=0),
+#             api_key=st.secrets["OPENAI_API_KEY"]
+#         )
+#         llm = OPENAI_LLM
+#
+#         # =============================================================================
+#         # CHAT MESSAGE HISTORY AND ARTIFACT STORAGE
+#         # =============================================================================
+#
+#         msgs = StreamlitChatMessageHistory(key="langchain_messages")
+#         if len(msgs.messages) == 0:
+#             msgs.add_ai_message("How can I help you?")
+#
+#         if "chat_artifacts" not in st.session_state:
+#             st.session_state["chat_artifacts"] = {}
+#
+#
+#         # =============================================================================
+#         # MAIN INTERACTION: GET USER QUESTION AND HANDLE RESPONSE
+#         # =============================================================================
+#
+#         # if st.session_state["DATA_RAW"] is not None:
+#         question = st.chat_input("Ask a data question:")
+#         if question:
+#             with st.spinner("Thinking..."):
+#                 msgs.add_user_message(question)
+#                 result = process_exploratory(question, llm, st.session_state["DATA_RAW"])
+#
+#                 tool_name = result.get("last_tool_call")
+#                 ai_msg = result.get("ai_message", "")
+#                 if tool_name:
+#                     ai_msg += f"\n\n*Tool Used: {tool_name}*"
+#
+#                 msgs.add_ai_message(ai_msg)
+#
+#                 # Attach artifacts to the most recent AI message (so they show immediately)
+#                 if "artifacts" in result:
+#                     msg_index = len(msgs.messages) - 1
+#                     st.session_state["chat_artifacts"][msg_index] = []
+#
+#                     # Build an artifact list to attach to the latest AI message
+#                     artifact_list = []
+#                     if "last_tool_call" in result:
+#                         tool_name = result["last_tool_call"]
+#                         if tool_name == "describe_dataset":
+#                             if "describe_df" in result:
+#                                 artifact_list.append(
+#                                     {
+#                                         "title": "Dataset Description",
+#                                         "render_type": "dataframe",
+#                                         "data": result["describe_df"],
+#                                     }
+#                                 )
+#                         elif tool_name == "visualize_missing":
+#                             if "matrix_plot_fig" in result:
+#                                 artifact_list.append(
+#                                     {
+#                                         "title": "Missing Data Matrix",
+#                                         "render_type": "matplotlib",
+#                                         "data": result["matrix_plot_fig"],
+#                                     }
+#                                 )
+#                             if "bar_plot_fig" in result:
+#                                 artifact_list.append(
+#                                     {
+#                                         "title": "Missing Data Bar Plot",
+#                                         "render_type": "matplotlib",
+#                                         "data": result["bar_plot_fig"],
+#                                     }
+#                                 )
+#                             if "heatmap_plot_fig" in result:
+#                                 artifact_list.append(
+#                                     {
+#                                         "title": "Missing Data Heatmap",
+#                                         "render_type": "matplotlib",
+#                                         "data": result["heatmap_plot_fig"],
+#                                     }
+#                                 )
+#                         elif tool_name == "generate_correlation_funnel":
+#                             if "correlation_data" in result:
+#                                 artifact_list.append(
+#                                     {
+#                                         "title": "Correlation Data",
+#                                         "render_type": "dataframe",
+#                                         "data": result["correlation_data"],
+#                                     }
+#                                 )
+#                             if "correlation_plotly" in result:
+#                                 artifact_list.append(
+#                                     {
+#                                         "title": "Correlation Funnel (Interactive Plotly)",
+#                                         "render_type": "plotly",
+#                                         "data": result["correlation_plotly"],
+#                                     }
+#                                 )
+#                         elif tool_name == "generate_sweetviz_report":
+#                             artifact_list.append(
+#                                 {
+#                                     "title": "Sweetviz Report",
+#                                     "render_type": "sweetviz",
+#                                     "data": {
+#                                         "report_file": result.get("report_file"),
+#                                         "report_html": result.get("report_html"),
+#                                     },
+#                                 }
+#                             )
+#                         elif tool_name == "generate_dtale_report":
+#                             artifact_list.append(
+#                                 {
+#                                     "title": "Dtale Interactive Report",
+#                                     "render_type": "dtale",
+#                                     "data": {"dtale_url": result.get("dtale_url")},
+#                                 }
+#                             )
+#
+#                         else:
+#                             if "plotly_fig" in result:
+#                                 artifact_list.append(
+#                                     {
+#                                         "title": "Plotly Figure",
+#                                         "render_type": "plotly",
+#                                         "data": result["plotly_fig"],
+#                                     }
+#                                 )
+#                             if "matplotlib_fig" in result:
+#                                 artifact_list.append(
+#                                     {
+#                                         "title": "Matplotlib Figure",
+#                                         "render_type": "matplotlib",
+#                                         "data": result["matplotlib_fig"],
+#                                     }
+#                                 )
+#                             if "dataframe" in result:
+#                                 artifact_list.append(
+#                                     {
+#                                         "title": "Dataframe",
+#                                         "render_type": "dataframe",
+#                                         "data": result["dataframe"],
+#                                     }
+#                                 )
+#                         # Attach artifacts to the most recent AI message (so they show immediately)
+#                         if artifact_list:
+#                             msg_index = len(msgs.messages) - 1
+#                             st.session_state["chat_artifacts"][msg_index] = artifact_list
+#
+#         # =============================================================================
+#         # FINAL RENDER: DISPLAY THE COMPLETE CHAT HISTORY WITH ARTIFACTS
+#         # =============================================================================
+#
+#         display_chat_history()
 
-        st.markdown("""
-Welcome to the EDA Copilot. This AI agent is designed to help you find and load data
-and return exploratory analysis reports that can be used to understand the data 
-prior to other analysis (e.g. modeling, feature engineering, etc).         
-""")
-        with st.expander("Example Questions", expanded=False):
-            st.write(
-                """
-                - What tools do you have access to? Return a table.
-                - Give me information on the correlation funnel tool.
-                - Explain the dataset.
-                - What do the first 5 rows contain?
-                - Describe the dataset.
-                - Analyze missing data in the dataset.
-                - Generate a correlation funnel. Use the Churn feature as the target.
-                - Generate a Sweetviz report for the dataset. Use the Churn feature as the target.
-                - Generate a Dtale report for the dataset.
-                """
+    elif page == 'Data Analyst':
+        st.subheader('Pandas Data Analyst Mode')
+        # Initialize message history
+        msgs = StreamlitChatMessageHistory(key="pandas_data_analyst_messages")
+        if len(msgs.messages) == 0:
+            msgs.add_ai_message("Hello! Ask me anything about your dataset.")
+        # Initialize the analyst agent if not already
+        if 'pandas_data_analyst' not in st.session_state:
+            model = ChatOpenAI(model='gpt-4o-mini', api_key=st.secrets['OPENAI_API_KEY'])
+            st.session_state.pandas_data_analyst = PandasDataAnalyst(
+                model=model,
+                data_wrangling_agent=DataWranglingAgent(model=model, log=False, n_samples=100),
+                data_visualization_agent=DataVisualizationAgent(model=model, log=False, n_samples=100)
             )
 
-        # Use OpenAI LLM from secrets
-        OPENAI_LLM = ChatOpenAI(
-            model=st.sidebar.selectbox("Choose OpenAI model", MODEL_LIST, index=0),
-            api_key=st.secrets["OPENAI_API_KEY"]
-        )
-        llm = OPENAI_LLM
-
-        # =============================================================================
-        # CHAT MESSAGE HISTORY AND ARTIFACT STORAGE
-        # =============================================================================
-
-        msgs = StreamlitChatMessageHistory(key="langchain_messages")
-        if len(msgs.messages) == 0:
-            msgs.add_ai_message("How can I help you?")
-
-        if "chat_artifacts" not in st.session_state:
-            st.session_state["chat_artifacts"] = {}
-
-
-        # =============================================================================
-        # MAIN INTERACTION: GET USER QUESTION AND HANDLE RESPONSE
-        # =============================================================================
-
-        # if st.session_state["DATA_RAW"] is not None:
-        question = st.chat_input("Ask a data question:")
+        # User input
+        question = st.chat_input("Ask a question about your dataset:")
         if question:
+            msgs.add_user_message(question)
             with st.spinner("Thinking..."):
-                msgs.add_user_message(question)
-                result = process_exploratory(question, llm, st.session_state["DATA_RAW"])
+                try:
+                    # Run the agent
+                    st.session_state.pandas_data_analyst.invoke_agent(
+                        user_instructions=question,
+                        data_raw=st.session_state["DATA_RAW"]
+                    )
+                    result = st.session_state.pandas_data_analyst.get_response()
+                    route = result.get("routing_preprocessor_decision", "")
 
-                tool_name = result.get("last_tool_call")
-                ai_msg = result.get("ai_message", "")
-                if tool_name:
-                    ai_msg += f"\n\n*Tool Used: {tool_name}*"
-
-                msgs.add_ai_message(ai_msg)
-
-                # Attach artifacts to the most recent AI message (so they show immediately)
-                if "artifacts" in result:
+                    # Add AI message
+                    ai_msg = "Here's what I found:"
+                    msgs.add_ai_message(ai_msg)
                     msg_index = len(msgs.messages) - 1
+
+                    # Store artifacts
+                    if "chat_artifacts" not in st.session_state:
+                        st.session_state["chat_artifacts"] = {}
+
                     st.session_state["chat_artifacts"][msg_index] = []
+                    if route == "chart" and not result.get("plotly_error", False):
+                        from plotly.io import from_json
+                        plot_obj = from_json(json.dumps(result["plotly_graph"]))
+                        st.session_state.plots.append(plot_obj)
+                        st.session_state["chat_artifacts"][msg_index].append({
+                            "title": "Chart",
+                            "render_type": "plotly",
+                            "data": plot_obj,
+                            'code': result.get('code_used')
+                        })
 
-                    # Build an artifact list to attach to the latest AI message
-                    artifact_list = []
-                    if "last_tool_call" in result:
-                        tool_name = result["last_tool_call"]
-                        if tool_name == "describe_dataset":
-                            if "describe_df" in result:
-                                artifact_list.append(
-                                    {
-                                        "title": "Dataset Description",
-                                        "render_type": "dataframe",
-                                        "data": result["describe_df"],
-                                    }
-                                )
-                        elif tool_name == "visualize_missing":
-                            if "matrix_plot_fig" in result:
-                                artifact_list.append(
-                                    {
-                                        "title": "Missing Data Matrix",
-                                        "render_type": "matplotlib",
-                                        "data": result["matrix_plot_fig"],
-                                    }
-                                )
-                            if "bar_plot_fig" in result:
-                                artifact_list.append(
-                                    {
-                                        "title": "Missing Data Bar Plot",
-                                        "render_type": "matplotlib",
-                                        "data": result["bar_plot_fig"],
-                                    }
-                                )
-                            if "heatmap_plot_fig" in result:
-                                artifact_list.append(
-                                    {
-                                        "title": "Missing Data Heatmap",
-                                        "render_type": "matplotlib",
-                                        "data": result["heatmap_plot_fig"],
-                                    }
-                                )
-                        elif tool_name == "generate_correlation_funnel":
-                            if "correlation_data" in result:
-                                artifact_list.append(
-                                    {
-                                        "title": "Correlation Data",
-                                        "render_type": "dataframe",
-                                        "data": result["correlation_data"],
-                                    }
-                                )
-                            if "correlation_plotly" in result:
-                                artifact_list.append(
-                                    {
-                                        "title": "Correlation Funnel (Interactive Plotly)",
-                                        "render_type": "plotly",
-                                        "data": result["correlation_plotly"],
-                                    }
-                                )
-                        elif tool_name == "generate_sweetviz_report":
-                            artifact_list.append(
-                                {
-                                    "title": "Sweetviz Report",
-                                    "render_type": "sweetviz",
-                                    "data": {
-                                        "report_file": result.get("report_file"),
-                                        "report_html": result.get("report_html"),
-                                    },
-                                }
-                            )
-                        elif tool_name == "generate_dtale_report":
-                            artifact_list.append(
-                                {
-                                    "title": "Dtale Interactive Report",
-                                    "render_type": "dtale",
-                                    "data": {"dtale_url": result.get("dtale_url")},
-                                }
-                            )
+                    elif route == "table":
+                        df = result.get("data_wrangled")
+                        if df is not None:
+                            st.session_state.dataframes.append(df)
+                            st.session_state["chat_artifacts"][msg_index].append({
+                                "title": "Table",
+                                "render_type": "dataframe",
+                                "data": df,
+                                'code': result.get('code_used')
+                            })
 
-                        else:
-                            if "plotly_fig" in result:
-                                artifact_list.append(
-                                    {
-                                        "title": "Plotly Figure",
-                                        "render_type": "plotly",
-                                        "data": result["plotly_fig"],
-                                    }
-                                )
-                            if "matplotlib_fig" in result:
-                                artifact_list.append(
-                                    {
-                                        "title": "Matplotlib Figure",
-                                        "render_type": "matplotlib",
-                                        "data": result["matplotlib_fig"],
-                                    }
-                                )
-                            if "dataframe" in result:
-                                artifact_list.append(
-                                    {
-                                        "title": "Dataframe",
-                                        "render_type": "dataframe",
-                                        "data": result["dataframe"],
-                                    }
-                                )
-                        # Attach artifacts to the most recent AI message (so they show immediately)
-                        if artifact_list:
-                            msg_index = len(msgs.messages) - 1
-                            st.session_state["chat_artifacts"][msg_index] = artifact_list
+                except Exception as e:
+                    error_msg = f"Error: {e}"
+                    msgs.add_ai_message(error_msg)
 
-        # =============================================================================
-        # FINAL RENDER: DISPLAY THE COMPLETE CHAT HISTORY WITH ARTIFACTS
-        # =============================================================================
-
+        # Display all messages and artifacts
         display_chat_history()
 
     elif page == 'Tree Mapping V2':

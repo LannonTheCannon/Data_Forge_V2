@@ -89,15 +89,21 @@ if 'plots' not in st.session_state:
 if 'dataframes' not in st.session_state:
     st.session_state.dataframes = []
 
+if "chat_artifacts" not in st.session_state:
+    st.session_state['chat_artifacts'] = {}
+
 
 def display_chat_history():
     for msg in msgs.messages:
         with st.chat_message(msg.type):
+            # Splitting the content and fetching the correct plotly chart
             if "PLOT_INDEX:" in msg.content:
                 plot_index = int(msg.content.split("PLOT_INDEX:")[1])
                 st.plotly_chart(
                     st.session_state.plots[plot_index], key=f"history_plot_{plot_index}"
                 )
+
+            # Getting the content and fetching the correct dataframe
             elif "DATAFRAME_INDEX:" in msg.content:
                 df_index = int(msg.content.split("DATAFRAME_INDEX:")[1])
                 st.dataframe(
