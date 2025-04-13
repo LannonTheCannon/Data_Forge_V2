@@ -14,6 +14,7 @@ import inspect
 from streamlit_elements import elements, dashboard, mui, html
 # from data import load_data
 import json
+from streamlit_code_editor import code_editor
 # ------------------------------
 # PandasAI + Callbacks
 # ------------------------------
@@ -111,9 +112,15 @@ def display_chat_history():
                                 st.dataframe(artifact["data"])
                             else:
                                 st.write("Unknown artifact type.")
-                        with tabs[1]:
-                            st.code(artifact.get("code", "# No code available"), language="python")
 
+                        with tabs[1]:
+                            edited = code_editor(
+                                code=artifact.get("code", "# No code available"),
+                                lang="python",
+                                height=300,
+                                theme="light",  # or "dark", "dracula", "monokai", etc.
+                                key=f"code_editor_{msg_index}_{i}"
+                            )
 
 # ------------------ Streamlit Multi Page Options -------------------#
 PAGE_OPTIONS = [
