@@ -13,7 +13,6 @@ from streamlit_ace import st_ace
 import inspect
 from streamlit_elements import elements, dashboard, mui, html
 # from data import load_data
-from resources.documentation_page_1 import documentation_page
 import json
 # ------------------------------
 # PandasAI + Callbacks
@@ -138,3 +137,28 @@ if __name__ == "__main__":
 
             st.write("### Data Summary")
             st.write(st.session_state.df_summary)
+
+    elif page == 'Data Analyst':
+        st.subheader('Pandas Data Analyst Mode')
+
+        # 1. Initialize chat message history
+        msgs = StreamlitChatMessageHistory(key="pandas_data_analyst_messages")
+
+        if len(msgs.messages) == 0:
+            msgs.add_ai_message("Hey whatsup! I\'m your personally data assistant. I can create tables or graphs for you")
+
+        # 2. Initialize the analyst agent if not already
+        if 'pandas_data_analyst' not in st.session_state:
+            model = ChatOpenAI(model='gpt-4o-mini', api_key=st.secrets['OPENAI_API_KEY'])
+            st.session_state.pandas_data_analyst = PandasDataAnalyst(
+                model=model,
+                data_wrangling_agent=DataWranglingAgent(model=model,
+                                                        log=False,
+                                                        n_samples=100),
+                data_visualization_agent=DataVisualizationAgent(model=model,
+                                                                log=False,
+                                                                n_samples=100))
+
+        # Get the user input
+        question = st.chat_input('Ask a question about your dataset!')
+        
