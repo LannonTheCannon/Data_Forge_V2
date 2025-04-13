@@ -91,6 +91,30 @@ def load_data(uploaded_file):
         return df
     return None
 
+# ------------------- STEP 2 Data Analyst Logic -------------------#
+def display_chat_history():
+    if "chat_artifacts" not in st.session_state:
+        st.session_state["chat_artifacts"] = {}
+
+    for i, msg in enumerate(msgs.messages):
+        role_label = "User" if msg.type == "human" else "Assistant"
+        with st.chat_message(msg.type):
+            st.markdown(f"**{role_label}:** {msg.content}")
+            if i in st.session_state["chat_artifacts"]:
+                for artifact in st.session_state["chat_artifacts"][i]:
+                    with st.expander(f"📎 {artifact['title']}", expanded=True):
+                        tabs = st.tabs(["📊 Output", "💻 Code"])
+                        with tabs[0]:
+                            if artifact["render_type"] == "plotly":
+                                st.plotly_chart(artifact["data"])
+                            elif artifact["render_type"] == "dataframe":
+                                st.dataframe(artifact["data"])
+                            else:
+                                st.write("Unknown artifact type.")
+                        with tabs[1]:
+                            st.code(artifact.get("code", "# No code available"), language="python")
+
+
 # ------------------ Streamlit Multi Page Options -------------------#
 PAGE_OPTIONS = [
     'Data Upload',
@@ -161,4 +185,53 @@ if __name__ == "__main__":
 
         # Get the user input
         question = st.chat_input('Ask a question about your dataset!')
-        
+        if question:
+            msgs.add_user_message(question)
+            with st.spinner("Thinking..."):
+                try:
+                    # Run the agent
+                    st.session_state.pandas_data_analyst.invoke_agent(
+                        user_instructions=question,
+                        data_raw=st.session_state["DATA_RAW"]
+                    )
+                    result = st.session_state.pandas_data_analyst.get_response()
+                    route = result.get("routing_preprocessor_decision", "")
+
+                    # Add AI message
+                    ai_msg = "Here's what I found:"
+                    msgs.add_ai_message(ai_msg)
+                    msg_index = len(msgs.messages) - 1
+
+                    # Store artifacts
+                    if "chat_artifacts" not in st.session_state:
+                        st.session_state["chat_artifacts"] = {}
+
+                    st.session_state["chat_artifacts"][msg_index] = []
+                    if route == "chart" and not result.get("plotly_error", False):
+                        from plotly.io import from_json
+                        plot_obj = from_json(json.dumps(result["plotly_graph"]))
+                        st.session_state.plots.append(plot_obj)
+                        st.session_state["chat_artifacts"][msg_index].append({
+                            "title": "Chart",
+                            "render_type": "plotly",
+                            "data": plot_obj,
+                            'code': result.get('data_visualization_function')
+                        })
+
+                    elif route == "table":
+                        df = result.get("data_wrangled")
+                        if df is not None:
+                            st.session_state.dataframes.append(df)
+                            st.session_state["chat_artifacts"][msg_index].append({
+                                "title": "Table",
+                                "render_type": "dataframe",
+                                "data": df,
+                                'code': result.get('data_wrangler_function')
+                            })
+
+                except Exception as e:
+                    error_msg = f"Error: {e}"
+                    msgs.add_ai_message(error_msg)
+
+        # Display all messages and artifacts
+        display_chat_history()

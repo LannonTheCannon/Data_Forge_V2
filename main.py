@@ -713,9 +713,7 @@ def show_dashboard():
                     else:
                         mui.Typography('Chart file not found')
 
-
-
-# =========== (AI Data Science Team) Data Analyst Logic ===============
+# =========== (AI Data Science Team) SweetViz and DTale  Logic ===============
 
 def render_report_iframe(report_src, src_type="url", height=620, title="Interactive Report"):
     """
@@ -877,28 +875,6 @@ def render_report_iframe(report_src, src_type="url", height=620, title="Interact
 #             else:
 #                 st.write(msg.content)
 
-def display_chat_history():
-    if "chat_artifacts" not in st.session_state:
-        st.session_state["chat_artifacts"] = {}
-
-    for i, msg in enumerate(msgs.messages):
-        role_label = "User" if msg.type == "human" else "Assistant"
-        with st.chat_message(msg.type):
-            st.markdown(f"**{role_label}:** {msg.content}")
-            if i in st.session_state["chat_artifacts"]:
-                for artifact in st.session_state["chat_artifacts"][i]:
-                    with st.expander(f"📎 {artifact['title']}", expanded=True):
-                        tabs = st.tabs(["📊 Output", "💻 Code"])
-                        with tabs[0]:
-                            if artifact["render_type"] == "plotly":
-                                st.plotly_chart(artifact["data"])
-                            elif artifact["render_type"] == "dataframe":
-                                st.dataframe(artifact["data"])
-                            else:
-                                st.write("Unknown artifact type.")
-                        with tabs[1]:
-                            st.code(artifact.get("code", "# No code available"), language="python")
-
 def process_exploratory(question: str, llm, data: pd.DataFrame) -> dict:
     """
     Initializes and calls the EDA agent using the provided question and data.
@@ -1006,6 +982,32 @@ def process_exploratory(question: str, llm, data: pd.DataFrame) -> dict:
         result["plain_response"] = ai_message
 
     return result
+
+''
+
+# ############## (AI Data Science Team Data Analyst Logic ########################
+
+def display_chat_history():
+    if "chat_artifacts" not in st.session_state:
+        st.session_state["chat_artifacts"] = {}
+
+    for i, msg in enumerate(msgs.messages):
+        role_label = "User" if msg.type == "human" else "Assistant"
+        with st.chat_message(msg.type):
+            st.markdown(f"**{role_label}:** {msg.content}")
+            if i in st.session_state["chat_artifacts"]:
+                for artifact in st.session_state["chat_artifacts"][i]:
+                    with st.expander(f"📎 {artifact['title']}", expanded=True):
+                        tabs = st.tabs(["📊 Output", "💻 Code"])
+                        with tabs[0]:
+                            if artifact["render_type"] == "plotly":
+                                st.plotly_chart(artifact["data"])
+                            elif artifact["render_type"] == "dataframe":
+                                st.dataframe(artifact["data"])
+                            else:
+                                st.write("Unknown artifact type.")
+                        with tabs[1]:
+                            st.code(artifact.get("code", "# No code available"), language="python")
 
 # Streamlit Page Setup ############################################################
 
