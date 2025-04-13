@@ -70,9 +70,6 @@ layout = [
     dashboard.Item("chart_item", 4, 0, 3, 3)   # Our new chart card
 ]
 
-# ----------------- Color Palette ------------------
-COLOR_PALETTE = ["#FF6B6B", "#6BCB77", "#4D96FF", "#FFD93D", "#845EC2", "#F9A826"]
-
 # ------------------- Initialize Session -------------------
 
 if "curr_state" not in st.session_state:
@@ -490,7 +487,54 @@ def expand_root_node(clicked_node):
 def get_node_depth(node_id):
     return node_id.count("_")  # each underscore = one level deeper
 
-# ------------------- Mind Mapping Logic -------------------
+# ------------------- Pandas Viz Logic -------------------
+class StreamlitCallback(BaseCallback):
+    def __init__(self, code_container, response_container) -> None:
+        self.code_container = code_container
+        self.response_container = response_container
+        self.generated_code = ""
+
+    def on_code(self, response: str):
+        self.generated_code = response
+        self.code_container.code(response, language="python")
+
+    def get_generated_code(self):
+        return self.generated_code
+
+class StreamlitResponse(ResponseParser):
+    def __init__(self, context) -> None:
+        super().__init__(context)
+
+    def format_dataframe(self, result):
+        st.dataframe(result["value"])
+        st.session_state.chart_generated = False
+
+    def format_plot(self, result):
+        chart_path = os.path.abspath("temp_chart.png")
+        if isinstance(result["value"], str):
+            existing_chart_path = os.path.abspath(result["value"])
+            if existing_chart_path == chart_path:
+                st.session_state.chart_generated = True
+                st.session_state.chart_path = chart_path
+            else:
+                try:
+                    shutil.copy(existing_chart_path, chart_path)
+                    st.session_state.chart_generated = True
+                    st.session_state.chart_path = chart_path
+                except Exception as e:
+                    st.error(f"⚠️ Error copying chart: {e}")
+                    st.session_state.chart_generated = False
+        elif isinstance(result["value"], plt.Figure):
+            result["value"].savefig(chart_path)
+            st.session_state.chart_generated = True
+            st.session_state.chart_path = chart_path
+        else:
+            st.error("⚠️ Unexpected chart format returned.")
+            st.session_state.chart_generated = False
+
+    def format_other(self, result):
+        st.markdown(f"### 📌 AI Insight\n\n{result['value']}")
+        st.session_state.chart_generated = False
 
 def reset_session_variables():
     # reset session state variables
@@ -608,6 +652,8 @@ that can be represented using line charts, bar graphs, scatter plots, or heatmap
         st.warning(f"Error in get_assistant_interpretation: {e}")
         return "Could not interpret user request."
 
+# ########################## Dashboarding Logic ##########################
+
 def handle_layout_change(updated_layout):
     st.session_state['dashboard_layout'] = updated_layout
     print("Updated layout in the app:", updated_layout)  # Goes to the app UI
@@ -667,55 +713,9 @@ def show_dashboard():
                     else:
                         mui.Typography('Chart file not found')
 
-class StreamlitCallback(BaseCallback):
-    def __init__(self, code_container, response_container) -> None:
-        self.code_container = code_container
-        self.response_container = response_container
-        self.generated_code = ""
 
-    def on_code(self, response: str):
-        self.generated_code = response
-        self.code_container.code(response, language="python")
 
-    def get_generated_code(self):
-        return self.generated_code
-
-class StreamlitResponse(ResponseParser):
-    def __init__(self, context) -> None:
-        super().__init__(context)
-
-    def format_dataframe(self, result):
-        st.dataframe(result["value"])
-        st.session_state.chart_generated = False
-
-    def format_plot(self, result):
-        chart_path = os.path.abspath("temp_chart.png")
-        if isinstance(result["value"], str):
-            existing_chart_path = os.path.abspath(result["value"])
-            if existing_chart_path == chart_path:
-                st.session_state.chart_generated = True
-                st.session_state.chart_path = chart_path
-            else:
-                try:
-                    shutil.copy(existing_chart_path, chart_path)
-                    st.session_state.chart_generated = True
-                    st.session_state.chart_path = chart_path
-                except Exception as e:
-                    st.error(f"⚠️ Error copying chart: {e}")
-                    st.session_state.chart_generated = False
-        elif isinstance(result["value"], plt.Figure):
-            result["value"].savefig(chart_path)
-            st.session_state.chart_generated = True
-            st.session_state.chart_path = chart_path
-        else:
-            st.error("⚠️ Unexpected chart format returned.")
-            st.session_state.chart_generated = False
-
-    def format_other(self, result):
-        st.markdown(f"### 📌 AI Insight\n\n{result['value']}")
-        st.session_state.chart_generated = False
-
-# =================================================================
+# =========== (AI Data Science Team) Data Analyst Logic ===============
 
 def render_report_iframe(report_src, src_type="url", height=620, title="Interactive Report"):
     """
@@ -1007,15 +1007,16 @@ def process_exploratory(question: str, llm, data: pd.DataFrame) -> dict:
 
     return result
 
+# Streamlit Page Setup ############################################################
+
 PAGE_OPTIONS = [
     'Data Upload',
     # 'EDA Tools Agent',
     'Data Analyst',
-    'Tree Mapping V2',
+    'Mind Mapping V2',
     'Pandas Viz',
     "Code Editor",
     'Dashboard',
-    'Documentation'
 ]
 
 page = st.sidebar.radio('Select a Page', PAGE_OPTIONS)
@@ -1316,7 +1317,7 @@ if __name__ == "__main__":
         # Display all messages and artifacts
         display_chat_history()
 
-    elif page == 'Tree Mapping V2':
+    elif page == 'Mind Mapping V2':
         st.title('Tree Mapping + OpenAI Ensemble')
 
         # Sync root node label with updated dataset name if needed
@@ -1578,5 +1579,5 @@ if __name__ == "__main__":
         st.title("Dashboard of Saved Charts")
         show_dashboard()
 
-    elif page == 'Documentation':
-        documentation_page()
+    # elif page == 'Documentation':
+    #     documentation_page()

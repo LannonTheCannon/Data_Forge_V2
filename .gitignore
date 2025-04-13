@@ -165,4 +165,4 @@ fraud_data.db
 .streamlit/secrets.toml
 *.toml
 
-streamlit_flow_standalone/credentials.yml
+standalone_projects/standalone_ai_ds_team/credentials.yml

@@ -1,0 +1,140 @@
+import os
+import time
+import base64
+import numpy as np
+import shutil
+import io
+import openai
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import streamlit as st
+from streamlit_ace import st_ace
+import inspect
+from streamlit_elements import elements, dashboard, mui, html
+# from data import load_data
+from resources.documentation_page_1 import documentation_page
+import json
+# ------------------------------
+# PandasAI + Callbacks
+# ------------------------------
+from pandasai import SmartDataframe
+from pandasai.llm import OpenAI as PandasOpenAI
+from pandasai.callbacks import BaseCallback
+from pandasai.responses.response_parser import ResponseParser
+# ------------------------------
+# Streamlit FLOW Layout
+# ------------------------------
+import streamlit as st
+from streamlit_flow import streamlit_flow
+from streamlit_flow.elements import StreamlitFlowNode, StreamlitFlowEdge
+from streamlit_flow.state import StreamlitFlowState
+from streamlit_flow.layouts import ManualLayout, RadialLayout, TreeLayout
+import random
+from uuid import uuid4
+# ------------------------------------------------------------------
+
+# Importing data science team stuff
+import streamlit.components.v1 as components
+from pathlib import Path
+import html
+from langchain_community.chat_message_histories import StreamlitChatMessageHistory
+from langchain_openai import ChatOpenAI
+from ai_data_science_team.ds_agents import EDAToolsAgent
+from ai_data_science_team.utils.matplotlib import matplotlib_from_base64
+from ai_data_science_team.utils.plotly import plotly_from_dict
+
+from ai_data_science_team import PandasDataAnalyst, DataWranglingAgent, DataVisualizationAgent
+
+##############
+# 1) Data Upload
+# 2) Data Analyst
+# 3) Dashboard
+
+st.set_page_config(page_title="Advanced PandasAI + Vision Demo", layout="wide")
+
+# ------------------------------
+# OpenAI Setup
+# ------------------------------
+client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+
+layout = [
+    # (element_identifier, x, y, w, h, additional_props...)
+    dashboard.Item("first_item", 0, 0, 2, 2),  # Draggable & resizable by default
+    dashboard.Item("second_item", 2, 0, 2, 2),  # Not draggable
+    dashboard.Item("third_item", 0, 2, 1, 1),    # Not resizable
+    dashboard.Item("chart_item", 4, 0, 3, 3)   # Our new chart card
+]
+
+if "chart_path" not in st.session_state:
+    st.session_state.chart_path = None
+if 'df' not in st.session_state:
+    st.session_state.df = None
+if "df_preview" not in st.session_state:
+    st.session_state.df_preview = None
+if "df_summary" not in st.session_state:
+    st.session_state.df_summary = None
+if "metadata_string" not in st.session_state:
+    st.session_state['metadata_string'] = ""
+if "saved_charts" not in st.session_state:
+    st.session_state['saved_charts'] = []
+if "DATA_RAW" not in st.session_state:
+    st.session_state["DATA_RAW"] = None
+if 'plots' not in st.session_state:
+    st.session_state.plots = []
+if 'dataframes' not in st.session_state:
+    st.session_state.dataframes = []
+
+# ------------------ STEP 1 DATA UPLOAD -------------------#
+def load_data(uploaded_file):
+    if uploaded_file is not None:
+        df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
+        return df
+    return None
+
+# ------------------ Streamlit Multi Page Options -------------------#
+PAGE_OPTIONS = [
+    'Data Upload',
+    'Data Analyst',
+    'Data Storytelling'
+]
+
+page = st.sidebar.radio('Select a Page', PAGE_OPTIONS)
+
+if __name__ == "__main__":
+    if page == 'Data Upload':
+        st.title('Upload your own Dataset!')
+        uploaded_file = st.file_uploader('Upload CSV or Excel here', type=['csv', 'excel'])
+
+        if uploaded_file is not None:
+            # Load data into session state
+            df = load_data(uploaded_file)
+            if df is not None:
+                st.session_state.df = df
+                st.session_state["DATA_RAW"] = df
+                st.session_state.df_preview = df.head()
+                st.session_state.df_summary = df.describe()
+
+                # Save dataset name without extension
+                dataset_name = uploaded_file.name.rsplit('.', 1)[0]
+                st.session_state['dataset_name'] = dataset_name
+                st.write(dataset_name)
+
+                # Rebuild a 'metadata_string' for the root node
+                if st.session_state.df_summary is not None:
+                    # Basic example of turning summary + columns into a string
+                    cols = list(st.session_state.df_summary.columns)
+                    row_count = st.session_state.df.shape[0]
+                    st.session_state.metadata_string = (
+                        f"Columns: {cols}\n"
+                        f"Total Rows: {row_count}\n"
+                        f"Summary Stats:\n{st.session_state.df_summary}"
+                    )
+
+        # Display preview & summary if data exists
+        if st.session_state.df is not None:
+            st.write("### Data Preview")
+            st.write(st.session_state.df_preview)
+
+            st.write("### Data Summary")
+            st.write(st.session_state.df_summary)
