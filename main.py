@@ -69,6 +69,7 @@ layout = [
     dashboard.Item("third_item", 0, 2, 1, 1),    # Not resizable
     dashboard.Item("chart_item", 4, 0, 3, 3)   # Our new chart card
 ]
+COLOR_PALETTE = ["#FF6B6B", "#6BCB77", "#4D96FF", "#FFD93D", "#845EC2", "#F9A826"]
 
 # ------------------- Initialize Session -------------------
 
