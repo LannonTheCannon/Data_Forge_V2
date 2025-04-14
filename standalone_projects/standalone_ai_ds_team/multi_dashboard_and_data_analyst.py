@@ -38,7 +38,6 @@ from ai_data_science_team.utils.plotly import plotly_from_dict
 from ai_data_science_team import PandasDataAnalyst, DataWranglingAgent, DataVisualizationAgent
 
 st.set_page_config(page_title="Advanced PandasAI + Vision Demo", layout="wide")
-
 client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # Seeting up session state vars
@@ -53,15 +52,6 @@ def load_data(uploaded_file):
         return df
     return None
 
-def plotly_from_dict(plotly_dict):
-
-    if isinstance(plotly_dict, dict) and "data" in plotly_dict and "layout" in plotly_dict:
-
-        return pio.from_json(json.dumps(plotly_dict))
-
-    return None
-
-
 def display_chat_history():
     if "chat_artifacts" not in st.session_state:
         st.session_state["chat_artifacts"] = {}
@@ -70,29 +60,20 @@ def display_chat_history():
         role_label = "User" if msg.type == "human" else "Assistant"
         with st.chat_message(msg.type):
             st.markdown(f"**{role_label}:** {msg.content}")
-
             if i in st.session_state["chat_artifacts"]:
                 for j, artifact in enumerate(st.session_state["chat_artifacts"][i]):
                     with st.expander(f"\U0001F4CE {artifact['title']}", expanded=True):
                         tabs = st.tabs(["\U0001F4CA Output", "💻 Code"])
-
                         with tabs[0]:
                             render_type = artifact.get("render_type")
                             data = artifact.get("data")
                             if isinstance(data, dict) and "data" in data and "layout" in data:
                                 data = pio.from_json(json.dumps(data))
-                            fig = plotly_from_dict(data)
-
-                            if fig is not None:
-
-                                st.plotly_chart(fig, use_container_width=True, config={
-
+                            if render_type == "plotly":
+                                st.plotly_chart(data, use_container_width=True, config={
                                     "displayModeBar": True,
-
                                     "scrollZoom": True,
-
                                     "displaylogo": False
-
                                 })
                             elif render_type == "dataframe":
                                 st.dataframe(data)
@@ -102,10 +83,9 @@ def display_chat_history():
                                 st.write(data)
                             else:
                                 st.warning("Unknown artifact type.")
-
                         unique_key = f"msg_{i}_artifact_{j}"
-
                         with tabs[1]:
+
                             editor_response = code_editor(
                                 code=artifact.get("code", "# No code available"),
                                 lang="python",
@@ -124,85 +104,39 @@ def display_chat_history():
                                 ],
                                 key=f"code_editor_{unique_key}"
                             )
-
                             code_to_run = editor_response.get("text", "").strip()
-
-                            if code_to_run:
-
-                                try:
-
-                                    exec_globals = {
-
-                                        "df": st.session_state.df,
-
-                                        "pd": pd,
-
-                                        "np": np,
-
-                                        "go": go,
-
-                                        "plt": plt,
-
-                                        "pio": pio,
-
-                                        "json": json,
-
-                                        "st": st
-
-                                    }
-
-                                    exec_locals = {}
-
-                                    # Execute the code
-
-                                    exec(code_to_run, exec_globals, exec_locals)
-
-                                    # Get the figure object
-
-                                    fig = exec_locals.get('fig') or exec_locals.get('output')
-
-                                    if fig is not None:
-
-                                        if isinstance(fig, go.Figure):
-
-                                            # Convert to JSON and back to ensure consistent format
-
-                                            fig_json = pio.to_json(fig)
-
-                                            fig_dict = json.loads(fig_json)
-
-                                            # Update the artifact data
-
-                                            st.session_state["chat_artifacts"][i][j]["data"] = fig_dict
-
-                                            st.session_state["chat_artifacts"][i][j]["render_type"] = "plotly"
-
-                                            st.session_state["chat_artifacts"][i][j]["code"] = code_to_run
-
-                                            st.experimental_rerun()
-
-
-
-                                        elif isinstance(fig, pd.DataFrame):
-
-                                            st.session_state["chat_artifacts"][i][j]["data"] = fig
-
-                                            st.session_state["chat_artifacts"][i][j]["render_type"] = "dataframe"
-
-                                            st.session_state["chat_artifacts"][i][j]["code"] = code_to_run
-
-                                            st.experimental_rerun()
-
-                                    else:
-
-                                        st.warning(
-                                            "No output detected. Make sure to assign your result to 'fig' or 'output' variable.")
-
-
-
-                                except Exception as e:
-
-                                    st.error(f"Error executing code: {str(e)}\n{traceback.format_exc()}")
+                            # if code_to_run:
+                            #     try:
+                            #         exec_globals = {
+                            #             "df": st.session_state.df,
+                            #             "pd": pd,
+                            #             "np": np,
+                            #             "go": go,
+                            #             "plt": plt,
+                            #             "pio": pio,
+                            #             "st": st
+                            #         }
+                            #
+                            #         exec_locals = {}
+                            #         exec(code_to_run, exec_globals, exec_locals)
+                            #         output_obj = exec_locals.get("output") or exec_locals.get("fig")
+                            #
+                            #         if isinstance(output_obj, dict) and "data" in output_obj and "layout" in output_obj:
+                            #             output_obj = pio.from_json(json.dumps(output_obj))
+                            #
+                            #         if isinstance(output_obj, go.Figure):
+                            #             st.session_state["chat_artifacts"][i][j]["data"] = output_obj
+                            #             st.session_state["chat_artifacts"][i][j]["render_type"] = "plotly"
+                            #             st.rerun()
+                            #
+                            #         elif isinstance(output_obj, pd.DataFrame):
+                            #             st.session_state["chat_artifacts"][i][j]["data"] = output_obj
+                            #             st.session_state["chat_artifacts"][i][j]["render_type"] = "dataframe"
+                            #             st.rerun()
+                            #         else:
+                            #             st.warning("No figure or dataframe detected. Please assign your Plotly figure to `fig` or `output`.")
+                            #     except Exception as e:
+                            #         st.error(f"Error executing code: {e}")
 
 PAGE_OPTIONS = [
     'Data Upload',
@@ -213,12 +147,15 @@ PAGE_OPTIONS = [
 page = st.sidebar.radio('Select a Page', PAGE_OPTIONS)
 
 if __name__ == "__main__":
+
     if page == 'Data Upload':
+
         st.title('Upload your own Dataset!')
         uploaded_file = st.file_uploader('Upload CSV or Excel here', type=['csv', 'excel'])
 
         if uploaded_file is not None:
             df = load_data(uploaded_file)
+
             if df is not None:
                 st.session_state.df = df
                 st.session_state["DATA_RAW"] = df
@@ -236,12 +173,11 @@ if __name__ == "__main__":
                         f"Total Rows: {row_count}\n"
                         f"Summary Stats:\n{st.session_state.df_summary}"
                     )
-
-        if st.session_state.df is not None:
-            st.write("### Data Preview")
-            st.write(st.session_state.df_preview)
-            st.write("### Data Summary")
-            st.write(st.session_state.df_summary)
+            if st.session_state.df is not None:
+                st.write("### Data Preview")
+                st.write(st.session_state.df_preview)
+                st.write("### Data Summary")
+                st.write(st.session_state.df_summary)
 
     elif page == 'Data Analyst':
         st.subheader('Pandas Data Analyst Mode')
@@ -267,16 +203,15 @@ if __name__ == "__main__":
                         user_instructions=question,
                         data_raw=st.session_state["DATA_RAW"]
                     )
+
                     result = st.session_state.pandas_data_analyst.get_response()
                     route = result.get("routing_preprocessor_decision", "")
-
                     ai_msg = "Here's what I found:"
                     msgs.add_ai_message(ai_msg)
                     msg_index = len(msgs.messages) - 1
 
                     if "chat_artifacts" not in st.session_state:
                         st.session_state["chat_artifacts"] = {}
-
                     st.session_state["chat_artifacts"][msg_index] = []
 
                     if route == "chart" and not result.get("plotly_error", False):
@@ -299,11 +234,10 @@ if __name__ == "__main__":
                                 "data": df,
                                 'code': result.get('data_wrangler_function')
                             })
+
                 except Exception as e:
                     error_msg = f"Error: {e}"
                     msgs.add_ai_message(error_msg)
-
         display_chat_history()
-
     else:
         st.info("Data Storytelling page coming soon!")
