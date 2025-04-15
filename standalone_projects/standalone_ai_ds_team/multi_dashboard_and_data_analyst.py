@@ -35,7 +35,7 @@ from langchain_openai import ChatOpenAI
 from ai_data_science_team.ds_agents import EDAToolsAgent
 from ai_data_science_team.utils.matplotlib import matplotlib_from_base64
 from ai_data_science_team.utils.plotly import plotly_from_dict
-from ai_data_science_team import PandasDataAnalyst, DataWranglingAgent, DataVisualizationAgent
+from ai_data_science_team_custom import PandasDataAnalyst, DataWranglingAgent, DataVisualizationAgent
 
 st.set_page_config(page_title="Advanced PandasAI + Vision Demo", layout="wide")
 client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
@@ -53,6 +53,52 @@ def load_data(uploaded_file):
         df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
         return df
     return None
+
+
+def get_assistant_interpretation(user_input, metadata):
+    prompt = f"""
+*Reinterpret the user’s request into a clear, visualization-ready question that aligns with the dataset’s 
+structure and is optimized for charting. Focus on extracting the core analytical intent, ensuring the output 
+is compatible with PandasAI’s ability to generate meaningful graphs.
+
+Here is the user's original query: {user_input}
+Here is the dataset metadata "{metadata}"
+
+Abstract away ambiguity—Do not take the request too literally. Instead, refine it to emphasize patterns, trends, 
+distributions, or comparisons that can be effectively represented visually.
+Ensure clarity for AI_Data_Science_Team and frame the question in a way that translates naturally into a visualization rather 
+than a direct data lookup or overly complex query.
+
+**IMPORTANT** Please use the exact correct column names found in the metadata! DO NOT MAKE UP COLUMN NAMES, PULL MOST RELEVANT 
+COLUMN NAMES IN ALIGNMENT WITH CORE USER QUERY/INTENT. 
+
+**IMPORTANT** If the column name is ambiguous, CHOOSE ONE that is most inline with the user's core intent. 
+
+Align with the dataset’s metadata—Use insights from the metadata to guide the interpretation, ensuring that the 
+suggested visualization is relevant to the data type (e.g., time series trends, categorical distributions, correlations).
+Prioritize chart compatibility—Reframe vague or broad queries into specific, actionable visual analysis 
+that can be represented using line charts, bar charts, scatter plots, heatmaps, violin plots, and boxplots.*
+"""
+
+    try:
+        # Again, use the Chat endpoint for a chat model (like gpt-3.5-turbo)
+        response = openai.chat.completions.create(
+            model="gpt-4.1-nano",
+            messages=[
+                {"role": "system",
+                 "content": "You are a helpful data analysis assistant designed to extract the core intent of the user query and form a high value prompt that can be used 100% of the time for ai_data_science_team (visual agent) for charting code. "},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=300,
+            temperature=0.3,
+        )
+        summary = response.choices[0].message.content
+
+        return summary
+
+    except Exception as e:
+        st.warning(f"Error in get_assistant_interpretation: {e}")
+        return "Could not interpret user request."
 
 
 def display_chat_history():
@@ -144,7 +190,7 @@ def display_chat_history():
                                         exec_locals = {}
                                         # Execute the user's code.
                                         exec(code_to_run, exec_globals, exec_locals)
-                                        st.write("Debug: local variables after execution:", list(exec_locals.keys()))
+                                        # st.write("Debug: local variables after execution:", list(exec_locals.keys()))
 
                                         # Initialize output_obj before assigning.
                                         output_obj = None
@@ -188,6 +234,7 @@ def display_chat_history():
                                         st.error(f"Error executing code: {e}")
 
 
+
 PAGE_OPTIONS = [
     'Data Upload',
     'Data Analyst',
@@ -229,21 +276,31 @@ if __name__ == "__main__":
         st.subheader('Pandas Data Analyst Mode')
         msgs = StreamlitChatMessageHistory(key="pandas_data_analyst_messages")
         if len(msgs.messages) == 0:
-            msgs.add_ai_message("Hey whatsup! I'm your personal data assistant. I can create tables or graphs for you.")
+            msgs.add_ai_message("IMPORTANT: The DATA section below lists the exact column names. Use these names exactly without substituting default or example names.")
         if 'pandas_data_analyst' not in st.session_state:
-            model = ChatOpenAI(model='gpt-4.1-nano', api_key=st.secrets['OPENAI_API_KEY'])
+            model = ChatOpenAI(model='gpt-4.1-mini', api_key=st.secrets['OPENAI_API_KEY'])
             st.session_state.pandas_data_analyst = PandasDataAnalyst(
                 model=model,
-                data_wrangling_agent=DataWranglingAgent(model=model, log=False, n_samples=100),
-                data_visualization_agent=DataVisualizationAgent(model=model, log=False, n_samples=100)
+                data_wrangling_agent=DataWranglingAgent(model=model,
+                                                        log=False,
+                                                        n_samples=100),
+                data_visualization_agent=DataVisualizationAgent(model=model,
+                                                                log=False,
+                                                                n_samples=100,
+                                                                # human_in_the_loop=True,
+                                                                # bypass_explain_code=True,
+                                                                bypass_recommended_steps=True)
             )
         question = st.chat_input('Ask a question about your dataset!')
+        interpretation = get_assistant_interpretation(question, st.session_state['metadata_string'])
+        print(interpretation)
+
         if question:
-            msgs.add_user_message(question)
+            msgs.add_user_message(interpretation)
             with st.spinner("Thinking..."):
                 try:
                     st.session_state.pandas_data_analyst.invoke_agent(
-                        user_instructions=question,
+                        user_instructions=interpretation,
                         data_raw=st.session_state["DATA_RAW"]
                     )
                     result = st.session_state.pandas_data_analyst.get_response()
@@ -263,6 +320,7 @@ if __name__ == "__main__":
                             "data": plot_obj,
                             'code': result.get('data_visualization_function')
                         })
+
                     elif route == "table":
                         df = result.get("data_wrangled")
                         if df is not None:
