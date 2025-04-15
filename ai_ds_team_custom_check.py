@@ -1,2 +1,2 @@
-import ai_data_science_team_custom
-print(ai_data_science_team_custom.__path__)
+import ai_data_science_team
+print(ai_data_science_team.__path__)

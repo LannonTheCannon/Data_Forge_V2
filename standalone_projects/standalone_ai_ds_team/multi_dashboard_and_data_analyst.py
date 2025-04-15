@@ -35,7 +35,7 @@ from langchain_openai import ChatOpenAI
 from ai_data_science_team.ds_agents import EDAToolsAgent
 from ai_data_science_team.utils.matplotlib import matplotlib_from_base64
 from ai_data_science_team.utils.plotly import plotly_from_dict
-from ai_data_science_team_custom import PandasDataAnalyst, DataWranglingAgent, DataVisualizationAgent
+from ai_data_science_team import PandasDataAnalyst, DataWranglingAgent, DataVisualizationAgent
 
 st.set_page_config(page_title="Advanced PandasAI + Vision Demo", layout="wide")
 client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])

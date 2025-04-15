@@ -3,6 +3,7 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/Data_Forge_V2.iml" filepath="$PROJECT_DIR$/.idea/Data_Forge_V2.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../ai-data-science-team_custom/.idea/ai-data-science-team_custom.iml" filepath="$PROJECT_DIR$/../ai-data-science-team_custom/.idea/ai-data-science-team_custom.iml" />
     </modules>
   </component>
 </project>
