@@ -289,7 +289,7 @@ if __name__ == "__main__":
                                                                 n_samples=100,
                                                                 # human_in_the_loop=True,
                                                                 # bypass_explain_code=True,
-                                                                bypass_recommended_steps=True)
+                                                                bypass_recommended_steps=False)
             )
         question = st.chat_input('Ask a question about your dataset!')
         interpretation = get_assistant_interpretation(question, st.session_state['metadata_string'])
