@@ -55,30 +55,25 @@ def load_data(uploaded_file):
     return None
 
 
-def get_assistant_interpretation(user_input, metadata):
+def get_assistant_interpretation(user_input, metadata, valid_columns):
+    column_names = ', '.join(valid_columns)
+
     prompt = f"""
-*Reinterpret the user’s request into a clear, visualization-ready question that aligns with the dataset’s 
-structure and is optimized for charting. Focus on extracting the core analytical intent, ensuring the output 
-is compatible with PandasAI’s ability to generate meaningful graphs.
+    *Reinterpret the user’s request into a clear, visualization-ready question that aligns with the dataset’s 
+    structure and is optimized for charting.
 
-Here is the user's original query: {user_input}
-Here is the dataset metadata "{metadata}"
+    User query: {user_input}
 
-Abstract away ambiguity—Do not take the request too literally. Instead, refine it to emphasize patterns, trends, 
-distributions, or comparisons that can be effectively represented visually.
-Ensure clarity for AI_Data_Science_Team and frame the question in a way that translates naturally into a visualization rather 
-than a direct data lookup or overly complex query.
+    These are the ONLY valid column names in the dataset:
+    {column_names}
 
-**IMPORTANT** Please use the exact correct column names found in the metadata! DO NOT MAKE UP COLUMN NAMES, PULL MOST RELEVANT 
-COLUMN NAMES IN ALIGNMENT WITH CORE USER QUERY/INTENT. 
+    Dataset metadata:
+    {metadata}
 
-**IMPORTANT** If the column name is ambiguous, CHOOSE ONE that is most inline with the user's core intent. 
+    You must ONLY use column names listed above. DO NOT guess or create new ones.
 
-Align with the dataset’s metadata—Use insights from the metadata to guide the interpretation, ensuring that the 
-suggested visualization is relevant to the data type (e.g., time series trends, categorical distributions, correlations).
-Prioritize chart compatibility—Reframe vague or broad queries into specific, actionable visual analysis 
-that can be represented using line charts, bar charts, scatter plots, heatmaps, violin plots, and boxplots.*
-"""
+    Return a reframed question that will guide a charting AI to produce the correct visualization.
+    """
 
     try:
         # Again, use the Chat endpoint for a chat model (like gpt-3.5-turbo)
@@ -278,7 +273,7 @@ if __name__ == "__main__":
         if len(msgs.messages) == 0:
             msgs.add_ai_message("IMPORTANT: The DATA section below lists the exact column names. Use these names exactly without substituting default or example names.")
         if 'pandas_data_analyst' not in st.session_state:
-            model = ChatOpenAI(model='gpt-4.1-mini', api_key=st.secrets['OPENAI_API_KEY'])
+            model = ChatOpenAI(model='gpt-4o-mini', api_key=st.secrets['OPENAI_API_KEY'])
             st.session_state.pandas_data_analyst = PandasDataAnalyst(
                 model=model,
                 data_wrangling_agent=DataWranglingAgent(model=model,
@@ -292,8 +287,12 @@ if __name__ == "__main__":
                                                                 bypass_recommended_steps=False)
             )
         question = st.chat_input('Ask a question about your dataset!')
-        interpretation = get_assistant_interpretation(question, st.session_state['metadata_string'])
-        print(interpretation)
+        interpretation = get_assistant_interpretation(
+            question,
+            st.session_state['metadata_string'],
+            st.session_state.df.columns  # ✅ pass real column names
+        )
+        # print(interpretation)
 
         if question:
             msgs.add_user_message(interpretation)
