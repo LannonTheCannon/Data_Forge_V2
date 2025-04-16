@@ -155,7 +155,6 @@ Rules:
 #         st.warning(f"Error in get_assistant_interpretation: {e}")
 #         return "Could not interpret user request."
 
-
 def display_chat_history():
     if "chat_artifacts" not in st.session_state:
         st.session_state["chat_artifacts"] = {}
@@ -253,7 +252,6 @@ def display_chat_history():
                                 st.dataframe(output_obj, key=f"df_{output_key}")
                             else:
                                 st.write(output_obj)
-
 
 PAGE_OPTIONS = [
     'Data Upload',
