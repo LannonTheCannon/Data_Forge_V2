@@ -54,46 +54,106 @@ def load_data(uploaded_file):
         return df
     return None
 
-
 def get_assistant_interpretation(user_input, metadata, valid_columns):
     column_names = ', '.join(valid_columns)
 
     prompt = f"""
-    *Reinterpret the user’s request into a clear, visualization-ready question that aligns with the dataset’s 
-    structure and is optimized for charting.
+You are a visualization interpreter.
 
-    User query: {user_input}
+Your job is to rephrase the user's request into a **precise and code-compatible** instruction. Use this format:
 
-    These are the ONLY valid column names in the dataset:
-    {column_names}
+→ "Create a [chart type] of the `[y_column]` on the y-axis ([aggregation]) and the `[x_column]` in the x-axis and make the chart [color]."
 
-    Dataset metadata:
-    {metadata}
+---
 
-    You must ONLY use column names listed above. DO NOT guess or create new ones.
+Rules:
+- DO NOT invent or guess column names. Use ONLY from this list:
+  {column_names}
+- NEVER say "average salary in USD" — instead say: "`salary_in_usd` on the y-axis (avg)"
+- Keep aggregation words like "avg", "sum", or "count" OUTSIDE of the column name.
+- Keep axis mappings clear and exact.
+- Mention the color explicitly at the end.
+- Avoid words like “visualize” or “illustrate.” Just say "Create a bar chart..."
 
-    Return a reframed question that will guide a charting AI to produce the correct visualization.
-    """
+---
+
+📥 USER QUERY:
+{user_input}
+
+📊 METADATA:
+{metadata}
+
+✍️ Respond with just one sentence using the format shown above.
+"""
 
     try:
-        # Again, use the Chat endpoint for a chat model (like gpt-3.5-turbo)
         response = openai.chat.completions.create(
-            model="gpt-4.1-nano",
+            model="gpt-4.1-mini",
             messages=[
-                {"role": "system",
-                 "content": "You are a helpful data analysis assistant designed to extract the core intent of the user query and form a high value prompt that can be used 100% of the time for ai_data_science_team (visual agent) for charting code. "},
+                {"role": "system", "content": "You are a helpful assistant that rewrites data visualization queries into precise and code-friendly instructions."},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=300,
-            temperature=0.3,
+            max_tokens=200,
+            temperature=0.2,
         )
-        summary = response.choices[0].message.content
-
-        return summary
+        return response.choices[0].message.content
 
     except Exception as e:
         st.warning(f"Error in get_assistant_interpretation: {e}")
         return "Could not interpret user request."
+# def get_assistant_interpretation(user_input, metadata, valid_columns):
+#     column_names = ', '.join(valid_columns)
+#
+#     prompt = f"""
+#     *Reinterpret the user’s request into a clear, visualization-ready question that aligns with the dataset’s
+#     structure and is optimized for charting.
+#
+#     User query: {user_input}
+#
+#     These are the ONLY valid column names in the dataset. If the user asks for "average salary", you must calculate it using `.groupby()` on `job_title` and take the mean of `salary_in_usd`. Do NOT reference non-existent columns.
+#
+#     Dataset metadata:
+#     {metadata}
+#
+#     ** IMPORTANT **
+#     1) Extract the exact column names from the user's query
+#     2) understand the key function of the user's intent and side functions of the user's query
+#
+#     For example:
+#     "create a plot of the average salary in usd by job title in a bar chart"
+#
+#     You will find that there is no average_salary_in_usd but there is "salary_in_usd" and you will
+#     need to get the mean of that. You'll also see that job_title is a column that is found in the
+#     dataset.
+#
+#     You must ONLY use column names listed above. DO NOT guess or create new ones.
+#
+#     Return a reframed question that will guide a charting AI to produce the correct visualization.
+#
+#     Your reframed question should look like this
+#
+#     "create a bar chart of the [salary_in_usd] on the y-axis but get the avg and the [job_title] on the x-axis.
+#     """
+#
+#     try:
+#         # Again, use the Chat endpoint for a chat model (like gpt-3.5-turbo)
+#         response = openai.chat.completions.create(
+#             model="gpt-4.1-mini",
+#             messages=[
+#                 {"role": "system",
+#                  "content": "You are a helpful data analysis assistant designed to extract the core intent of the user query and form a high value prompt that can be used 100% of the time for ai_data_science_team (visual agent) for charting code. "},
+#                 {"role": "user", "content": prompt}
+#             ],
+#             max_tokens=300,
+#             temperature=0.0,
+#         )
+#         summary = response.choices[0].message.content
+#
+#         return summary
+#
+#     except Exception as e:
+#         st.warning(f"Error in get_assistant_interpretation: {e}")
+#         return "Could not interpret user request."
 
 
 def display_chat_history():
@@ -228,8 +288,6 @@ def display_chat_history():
                                     except Exception as e:
                                         st.error(f"Error executing code: {e}")
 
-
-
 PAGE_OPTIONS = [
     'Data Upload',
     'Data Analyst',
@@ -271,20 +329,21 @@ if __name__ == "__main__":
         st.subheader('Pandas Data Analyst Mode')
         msgs = StreamlitChatMessageHistory(key="pandas_data_analyst_messages")
         if len(msgs.messages) == 0:
-            msgs.add_ai_message("IMPORTANT: The DATA section below lists the exact column names. Use these names exactly without substituting default or example names.")
+            msgs.add_ai_message("IMPORTANT: For best results use this formula -> Create a [chart] of the [field] on the y-axis (aggregation) and the [field] on the x-axis and make the chart [color].")
         if 'pandas_data_analyst' not in st.session_state:
-            model = ChatOpenAI(model='gpt-4o-mini', api_key=st.secrets['OPENAI_API_KEY'])
+            model = ChatOpenAI(model='gpt-4.1-nano', api_key=st.secrets['OPENAI_API_KEY'])
             st.session_state.pandas_data_analyst = PandasDataAnalyst(
                 model=model,
                 data_wrangling_agent=DataWranglingAgent(model=model,
-                                                        log=False,
+                                                        log=True,
                                                         n_samples=100),
-                data_visualization_agent=DataVisualizationAgent(model=model,
-                                                                log=False,
-                                                                n_samples=100,
-                                                                # human_in_the_loop=True,
-                                                                # bypass_explain_code=True,
-                                                                bypass_recommended_steps=False)
+                data_visualization_agent=DataVisualizationAgent(
+                                                        model=model,
+                                                        log=True,
+                                                        log_path="logs",
+                                                        overwrite=False,  # ✅ Ensures every chart gets a separate file
+                                                        n_samples=100,
+                                                        bypass_recommended_steps=False)
             )
         question = st.chat_input('Ask a question about your dataset!')
         interpretation = get_assistant_interpretation(
@@ -313,12 +372,21 @@ if __name__ == "__main__":
                     if route == "chart" and not result.get("plotly_error", False):
                         plot_obj = pio.from_json(json.dumps(result["plotly_graph"]))
                         st.session_state.plots.append(plot_obj)
+                        # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+                        viz_code = result.get('data_visualization_function', "")
+                        wrangle_code = result.get('data_wrangler_function', "")
+
+                        # Combine both functions into one code block
+                        combined_code = f"{wrangle_code}\n\n{viz_code}\n\n# Runtime Execution\noutput = data_visualization(data_wrangler([df]))"
+
                         st.session_state["chat_artifacts"][msg_index].append({
                             "title": "Chart",
                             "render_type": "plotly",
                             "data": plot_obj,
-                            'code': result.get('data_visualization_function')
+                            "code": combined_code
                         })
+                        # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+                        print(result['data_visualization_function'])
 
                     elif route == "table":
                         df = result.get("data_wrangled")
