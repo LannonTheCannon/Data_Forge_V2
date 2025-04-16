@@ -167,43 +167,18 @@ def display_chat_history():
 
             if i in st.session_state["chat_artifacts"]:
                 for j, artifact in enumerate(st.session_state["chat_artifacts"][i]):
+                    unique_key = f"msg_{i}_artifact_{j}"
+                    editor_key = f"editor_code_{unique_key}"
+                    output_key = f"output_chart_{unique_key}"
+
                     with st.expander(f"\U0001F4CE {artifact['title']}", expanded=True):
+                        tabs = st.tabs(["📊 Output", "💻 Code"])
 
-                        # Define three tabs: Output, Code, User Output
-                        tabs = st.tabs(["\U0001F4CA Output", "💻 Code", "User Output"])
-                        unique_key = f"msg_{i}_artifact_{j}"
-
-                        # --- Tab 0: Original Output ---
-                        with tabs[0]:
-                            render_type = artifact.get("render_type")
-                            data = artifact.get("data")
-                            # If data is a dict representation of a Plotly chart, convert it
-                            if isinstance(data, dict) and "data" in data and "layout" in data:
-                                data = pio.from_json(json.dumps(data))
-                            if render_type == "plotly":
-                                st.plotly_chart(
-                                    data,
-                                    use_container_width=True,
-                                    config={
-                                        "displayModeBar": True,
-                                        "scrollZoom": True,
-                                        "displaylogo": False
-                                    },
-                                    key=f"plotly_chart_{unique_key}_original"
-                                )
-                            elif render_type == "dataframe":
-                                st.dataframe(data, key=f"dataframe_{unique_key}_original")
-                            elif render_type == "string":
-                                st.markdown(data, key=f"string_{unique_key}_original")
-                            elif render_type == "number":
-                                st.write(data, key=f"number_{unique_key}_original")
-                            else:
-                                st.warning("Unknown artifact type.", key=f"warning_{unique_key}_original")
-
-                        # --- Tab 1: Code Editor (using your code_editor widget) ---
+                        # --- Code Tab First, to capture edits and trigger updates ---
                         with tabs[1]:
+                            code_before = st.session_state.get(editor_key, artifact.get("code", ""))
                             editor_response = code_editor(
-                                code=artifact.get("code", "# No code available"),
+                                code=code_before,
                                 lang="python",
                                 theme="dracula",
                                 height=300,
@@ -220,73 +195,65 @@ def display_chat_history():
                                 ],
                                 key=f"code_editor_{unique_key}"
                             )
-                            # Get the code from the editor response.
-                            code_to_run = editor_response.get("text", "").strip()
 
-                        # --- Tab 2: User Output (run the code and display result) ---
-                        with tabs[2]:
-                            # Provide a button to execute the user's code.
-                            if st.button("Run Code", key=f"run_code_{unique_key}"):
-                                if not code_to_run:
-                                    st.error("No code to run. Please check your code.")
-                                else:
-                                    try:
-                                        # Create a controlled execution environment.
-                                        exec_globals = {
-                                            "df": st.session_state.df,  # Pass your DataFrame here
-                                            "pd": pd,
-                                            "np": np,
-                                            "sns": sns,
-                                            "go": go,
-                                            "plt": plt,
-                                            "pio": pio,
-                                            "st": st
-                                        }
-                                        exec_locals = {}
-                                        # Execute the user's code.
-                                        exec(code_to_run, exec_globals, exec_locals)
-                                        # st.write("Debug: local variables after execution:", list(exec_locals.keys()))
+                            new_code = editor_response.get("text", "").strip()
 
-                                        # Initialize output_obj before assigning.
-                                        output_obj = None
-                                        if "fig" in exec_locals:
-                                            output_obj = exec_locals["fig"]
-                                        elif "output" in exec_locals:
-                                            output_obj = exec_locals["output"]
-                                        elif "fig_dict" in exec_locals:
-                                            output_obj = exec_locals["fig_dict"]
+                            # Only run if the code has changed
+                            if new_code and new_code != st.session_state.get(editor_key):
+                                try:
+                                    exec_globals = {
+                                        "df": st.session_state.df,
+                                        "pd": pd,
+                                        "np": np,
+                                        "sns": sns,
+                                        "go": go,
+                                        "plt": plt,
+                                        "pio": pio,
+                                        "st": st,
+                                        "json": json
+                                    }
+                                    exec_locals = {}
+                                    exec(new_code, exec_globals, exec_locals)
 
-                                        # If not found, check if a function named data_visualization is defined and call it.
-                                        if output_obj is None and "data_visualization" in exec_locals:
-                                            output_obj = exec_locals["data_visualization"](st.session_state.df)
+                                    output_obj = exec_locals.get("fig") or \
+                                                 exec_locals.get("output") or \
+                                                 exec_locals.get("fig_dict")
 
-                                        if output_obj is None:
-                                            st.error(
-                                                "No output detected. Please ensure your code assigns the output to 'fig' or 'output', or define a 'data_visualization(data_raw)' function.")
-                                        else:
-                                            # If the object is a dict (likely a JSON Plotly chart), convert it.
-                                            if isinstance(output_obj,
-                                                          dict) and "data" in output_obj and "layout" in output_obj:
-                                                output_obj = pio.from_json(json.dumps(output_obj))
-                                            # Display the Plotly chart.
-                                            if isinstance(output_obj, go.Figure):
-                                                st.plotly_chart(
-                                                    output_obj,
-                                                    use_container_width=True,
-                                                    config={
-                                                        "displayModeBar": True,
-                                                        "scrollZoom": True,
-                                                        "displaylogo": False
-                                                    },
-                                                    key=f"plotly_chart_{unique_key}_useroutput"
-                                                )
-                                            # Alternatively, display as a dataframe.
-                                            elif isinstance(output_obj, pd.DataFrame):
-                                                st.dataframe(output_obj, key=f"dataframe_{unique_key}_useroutput")
-                                            else:
-                                                st.write(output_obj, key=f"output_{unique_key}_useroutput")
-                                    except Exception as e:
-                                        st.error(f"Error executing code: {e}")
+                                    if isinstance(output_obj, dict) and "data" in output_obj and "layout" in output_obj:
+                                        output_obj = pio.from_json(json.dumps(output_obj))
+
+                                    artifact["data"] = output_obj
+                                    artifact["render_type"] = "plotly" if isinstance(output_obj, go.Figure) else "dataframe"
+                                    st.session_state[editor_key] = new_code
+                                    st.session_state[output_key] = output_obj
+
+                                except Exception as e:
+                                    st.error(f"Error executing code: {e}")
+
+                        # --- Output Tab ---
+                        with tabs[0]:
+                            output_obj = st.session_state.get(output_key, artifact.get("data"))
+                            render_type = artifact.get("render_type")
+
+                            if isinstance(output_obj, dict) and "data" in output_obj and "layout" in output_obj:
+                                output_obj = pio.from_json(json.dumps(output_obj))
+
+                            if render_type == "plotly":
+                                st.plotly_chart(
+                                    output_obj,
+                                    use_container_width=True,
+                                    config={
+                                        "displayModeBar": True,
+                                        "scrollZoom": True,
+                                        "displaylogo": False
+                                    },
+                                    key=f"plotly_{output_key}"
+                                )
+                            elif render_type == "dataframe":
+                                st.dataframe(output_obj, key=f"df_{output_key}")
+                            else:
+                                st.write(output_obj)
+
 
 PAGE_OPTIONS = [
     'Data Upload',
