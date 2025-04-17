@@ -54,6 +54,7 @@ for key in ["chart_path", "df", "df_preview", "df_summary", "metadata_string", "
 
 
 # ######################### Data Upload function ######################### #
+
 def load_data(uploaded_file):
     if uploaded_file is not None:
         df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
@@ -102,44 +103,67 @@ def generate_root_summary_question(metadata_string: str) -> str:
 
 def get_list_questions(context: str):
     """
-    Generate 5 questions given the dataset metadata plus
+    Generate 4 questions given the dataset metadata plus
     the parent's context (if any).
     """
     if "df_summary" not in st.session_state or st.session_state.df_summary is None:
         return ["No dataset summary found. Please upload a dataset first."]
 
-    # Build base metadata from session
-    metadata = {
-        "columns": list(st.session_state.df_summary.columns),
-        "summary": st.session_state.df_summary.to_dict(),
-        "row_count": st.session_state.df.shape[0] if st.session_state.df is not None else 0
-    }
-    metadata_string = (
-        f"Columns: {', '.join(metadata['columns'])}\n"
-        f"Total Rows: {metadata['row_count']}\n"
-        f"Summary Stats: {metadata['summary']}"
-    )
-
-    # You can combine the parent's 'context' (question text) with the metadata
-    # so the AI knows what the user is focusing on.
     combined_context = (
         f"Parent's context/question: {context}\n\n"
-        f"Dataset metadata:\n{metadata_string}"
+        f"Dataset metadata:\n{st.session_state.metadata_string}"
     )
 
+    prompt = """
+You are **Viz‑Detective‑GPT**.
+
+Your task is to propose **exactly FOUR** analysis tasks that can each be turned into a
+**basic visualisation**.  Follow these rules:
+
+1. **Start with the insight → choose the chart.**  
+   Think about the relationship the user might want to see first, then pick
+   the simplest chart that reveals it.
+
+2. Stick to these elementary chart families  
+   • Histogram (distribution of one numeric column)  
+   • Bar chart (count or aggregate of one categorical column)  
+   • Grouped / Stacked bar (two categorical columns)  
+   • Line chart (trend over an ordered or date column)  
+   • Scatter plot (two numeric columns)  
+   • Scatter + LOESS / best‑fit line  
+   • Box plot (numeric‑by‑categorical)  
+   • Heat‑map (correlation or contingency table)  
+   • Violin / Strip plot (optional if box plot is unsuitable)
+   
+   Only use ONE chart if the dataset’s columns make sense for it, create table of 
+   INSIGHT if not. Make sure you are explicit in saying "generate a table" if you are look for a key 
+   insight for example "What is the highest salary in the dataset" or something like that. 
+
+3. **Column discipline**  
+   Use **only** the column names provided in the metadata.  
+   Never invent new columns; never rename existing ones.
+
+4. **Output format** – one line per task, no list markers: 
+            
+Here's an example 
+
+Create a <chart‑type> to show <insight> using <x_column> on the x‑axis and <y_column> on the y‑axis (<aggregation>).
+
+– Replace `<aggregation>` with avg, sum, count, median, etc., or drop it for raw values.  
+– If two columns go on the same axis (e.g. grouped bar), mention both.  
+– End the sentence with the proposed chart type in parentheses.
+
+5. **Example** (show the style you must produce):  
+            
+Create a grouped bar chart to compare average salary_in_usd for each experience_level across company_size (grouped bar chart).
+
+Return exactly four lines that follow rule 4.           
+            
+            """
     messages = [
         {
             "role": "system",
-            "content": """You are a data detective. Given the metadata and the parent theme (e.g. 'Histogram', 'Bar Chart', 'Pivot Table'), generate exactly 4 **analysis tasks** that fit that theme.
-+
-+        - If the theme is **Histogram**, ask about the distribution of numeric columns.
-+        - If **Bar Chart**, ask for frequency comparisons of categorical columns.
-+        - If **Scatter Plot**, ask for numeric vs numeric relationships.
-+        - If **Box Plot**, ask for numeric-by-categorical comparisons.
-+        - If **Heatmap**, ask for correlations or contingency across multiple columns.
-+        - If **Pivot Table**, ask for cross-tabulations of two categorical columns.
-+
-+        Format each task as a short question, referencing actual column names."""
+            "content": prompt,
         },
         {
             "role": "user",
@@ -163,54 +187,6 @@ def get_list_questions(context: str):
         return [f"Error generating questions: {str(e)}"]
 
 # ++++++++++++++++++++++++ Generate Multiple Questions Sub Function +++++++++++++++++++++++++ #
-
-def generate_multiple_question_sets(parent_context: str):
-    """
-    Calls get_list_questions 3 times to create 3 sets of questions
-    using the parent's context (full question or dataset metadata).
-    """
-    q1 = get_list_questions(parent_context)
-    q2 = get_list_questions(parent_context)
-    q3 = get_list_questions(parent_context)
-    return q1, q2, q3
-
-def identify_common_questions(question_set_1, question_set_2, question_set_3):
-    """
-    Uses AI to find the most relevant, commonly occurring questions
-    across the three sets. We'll return the top 4.
-    """
-    joined_1 = "\n".join(question_set_1)
-    joined_2 = "\n".join(question_set_2)
-    joined_3 = "\n".join(question_set_3)
-
-    messages = [
-        {
-            "role": "system",
-            "content": """You are an expert data analyst assistant. 
-               Identify the 4 most relevant and commonly occurring questions 
-               from the three sets. Provide exactly 4 lines with no numbers,
-               bullet points, or additional text. """
-        },
-        {
-            "role": "user",
-            "content": f"""Set 1:\n{joined_1}\n
-                            Set 2:\n{joined_2}\n
-                            Set 3:\n{joined_3}\n
-                            Please provide exactly 4 questions, each on its own line, with no numbering."""
-        }
-    ]
-    try:
-        response = openai.chat.completions.create(
-            model="gpt-4.1-nano",
-            messages=messages,
-            max_tokens=800
-        )
-        raw = response.choices[0].message.content.strip()
-        lines = [l.strip() for l in raw.split("\n") if l.strip()]
-        # If more than 4 lines come back, just take the first 4
-        return lines[:4]
-    except Exception as e:
-        return [f"Error identifying common questions: {str(e)}"]
 
 def paraphrase_questions(questions):
     """
@@ -334,29 +310,15 @@ def expand_node_with_questions(clicked_node):
     # 1) Determine theme (e.g. "Histogram", "Bar Chart", etc.)
     theme = clicked_node.data.get("full_question", "")
 
-    # 2) Build a rich metadata string including cat & num cols
-    df = st.session_state.df
-    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-    categorical_cols = df.select_dtypes(include=['object', 'category', 'bool']).columns.tolist()
-    metadata_string = (
-        f"Numeric columns: {numeric_cols}\n"
-        f"Categorical columns: {categorical_cols}\n"
-        f"Row count: {df.shape[0]}"
-    )
-
-    # 3) Assemble the LLM context: theme + full metadata
-    context = f"Theme: {theme}\n\nDataset metadata:\n{metadata_string}"
-
-    # 4) Generate 3 question‐sets & pick the top 4
-    q1, q2, q3 = generate_multiple_question_sets(context)
-    top_questions = identify_common_questions(q1, q2, q3)
-    short_labels = paraphrase_questions(top_questions)
+    context = f"Theme: {theme}\n\nDataset metadata:\n{st.session_state.metadata_string}"
+    q1 = get_list_questions(context)
+    short_labels = paraphrase_questions(q1)
 
     # 5) Create child nodes for each question
     parent_path = clicked_node.data.get("section_path", "S0")
-    child_paths = get_section_path_children(parent_path, num_children=len(top_questions))
+    child_paths = get_section_path_children(parent_path, num_children=len(q1))
     for i, child_path in enumerate(child_paths):
-        full_q = top_questions[i]
+        full_q = q1[i]
         label = short_labels[i]
         color = get_color_for_depth(child_path)
 
@@ -681,9 +643,10 @@ if __name__ == "__main__":
         st.subheader('Pandas Data Analyst Mode')
         msgs = StreamlitChatMessageHistory(key="pandas_data_analyst_messages")
         if len(msgs.messages) == 0:
-            msgs.add_ai_message("IMPORTANT: For best results use this formula -> Create a [chart] of the [field] on the y-axis (aggregation) and the [field] on the x-axis and make the chart [color].")
+            pass
+            # msgs.add_ai_message("IMPORTANT: For best results use this formula -> Create a [chart] of the [field] on the y-axis (aggregation) and the [field] on the x-axis and make the chart [color].")
         if 'pandas_data_analyst' not in st.session_state:
-            model = ChatOpenAI(model='gpt-4.1', api_key=st.secrets['OPENAI_API_KEY'])
+            model = ChatOpenAI(model='gpt-4.1-mini', api_key=st.secrets['OPENAI_API_KEY'])
             st.session_state.pandas_data_analyst = PandasDataAnalyst(
                 model=model,
                 data_wrangling_agent=DataWranglingAgent(model=model,

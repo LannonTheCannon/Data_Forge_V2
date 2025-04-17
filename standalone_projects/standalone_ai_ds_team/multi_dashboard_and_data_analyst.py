@@ -296,7 +296,7 @@ if __name__ == "__main__":
         if len(msgs.messages) == 0:
             msgs.add_ai_message("IMPORTANT: For best results use this formula -> Create a [chart] of the [field] on the y-axis (aggregation) and the [field] on the x-axis and make the chart [color].")
         if 'pandas_data_analyst' not in st.session_state:
-            model = ChatOpenAI(model='gpt-4.1-nano', api_key=st.secrets['OPENAI_API_KEY'])
+            model = ChatOpenAI(model='gpt-4.1', api_key=st.secrets['OPENAI_API_KEY'])
             st.session_state.pandas_data_analyst = PandasDataAnalyst(
                 model=model,
                 data_wrangling_agent=DataWranglingAgent(model=model,
