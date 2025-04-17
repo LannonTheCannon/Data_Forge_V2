@@ -130,23 +130,16 @@ def get_list_questions(context: str):
     messages = [
         {
             "role": "system",
-            "content": """You are a data analyst assistant that generates concise, structured, 
-            and insightful visualization questions. Each question should focus on 
-            specific data relationships or trends, referencing the relevant columns when possible.
-            You are a data analyst assistant that generates insightful and structured visualization questions based on dataset metadata. 
-
-            - These questions must be optimized for use with the Pandas AI Smart DataFrame.
-            - They should be **concise** and **direct**, avoiding overly descriptive or wordy phrasing.
-            - Each question should focus on **specific relationships** or **trends** that can be effectively visualized.
-            - Prioritize **correlation, distribution, time-based trends, and categorical comparisons** in the dataset.
-            - Format them as a numbered list.
-
-            Given the following dataset metadata:
-            {metadata_string}
-
-            Generate 4 structured questions that align with best practices in data analysis and visualization. 
-
-            """
+            "content": """You are a data detective. Given the metadata and the parent theme (e.g. 'Histogram', 'Bar Chart', 'Pivot Table'), generate exactly 4 **analysis tasks** that fit that theme.
++
++        - If the theme is **Histogram**, ask about the distribution of numeric columns.
++        - If **Bar Chart**, ask for frequency comparisons of categorical columns.
++        - If **Scatter Plot**, ask for numeric vs numeric relationships.
++        - If **Box Plot**, ask for numeric-by-categorical comparisons.
++        - If **Heatmap**, ask for correlations or contingency across multiple columns.
++        - If **Pivot Table**, ask for cross-tabulations of two categorical columns.
++
++        Format each task as a short question, referencing actual column names."""
         },
         {
             "role": "user",
@@ -156,7 +149,7 @@ def get_list_questions(context: str):
 
     try:
         response = openai.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4.1-mini",
             messages=messages,
             max_tokens=800
         )
@@ -208,7 +201,7 @@ def identify_common_questions(question_set_1, question_set_2, question_set_3):
     ]
     try:
         response = openai.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4.1-nano",
             messages=messages,
             max_tokens=800
         )
@@ -240,7 +233,7 @@ def paraphrase_questions(questions):
 
     try:
         response = openai.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4.1-nano",
             messages=messages,
             max_tokens=500
         )
@@ -277,128 +270,124 @@ def get_color_for_depth(section_path: str):
 # XXXXXXXXXXXXXXXXXXXXXXXXXXXXX Expanding Node with Questions Function XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX #
 
 def expand_root_node(clicked_node):
-    # Hard-boiled coded list of the top-level EDA themes (DATA ARCHETYPES)
-
+    """
+    Expand the ROOT node into EDA archetype themes:
+    Histogram, Bar Chart, Scatter Plot, Box Plot, Heatmap, Pivot Table.
+    """
     themes = [
-        ('Distributions', "#FF6B6B"),
-        ("Correlations", "#6BCB77"),
-        ("Missingness", "#4D96FF"),
-        ("Data Types", "#FFD93D")
+        ("Histogram",    "#FF6B6B"),
+        ("Bar Chart",    "#6BCB77"),
+        ("Scatter Plot", "#4D96FF"),
+        ("Box Plot",     "#FFD93D"),
+        ("Heatmap",      "#845EC2"),
+        ("Pivot Table",  "#F9A826"),
     ]
 
-    parent_path = clicked_node.data['section_path']
+    parent_path = clicked_node.data["section_path"]
 
-    for i, (theme_label, color) in enumerate(themes):
-        child_id = f'{parent_path}.{i+1}'
+    # 1) Create one child node per theme
+    for idx, (theme_label, color) in enumerate(themes, start=1):
+        child_path = f"{parent_path}.{idx}"
+        node_data = {
+            "section_path": child_path,
+            "short_label": theme_label,
+            "full_question": theme_label,     # use the theme as the query context
+            "content": f"**{theme_label}**",
+            "node_type": "thematic"
+        }
+
         new_node = StreamlitFlowNode(
-            child_id,
+            child_path,
             (random.randint(-100, 100), random.randint(-100, 100)),
-            {
-                "section_path": child_id,
-                "short_label": theme_label,
-                "full_question": "",  # We'll leave empty for now
-                "content": f"**{theme_label}**",
-                "node_type": "thematic"  # <-- Label these nodes as 'thematic'
-            },
-            "default",
-            "right",
-            "left",
+            node_data,
+            "default",   # node shape/type
+            "right",     # target handle position
+            "left",      # source handle position
             style={"backgroundColor": color}
         )
-
         st.session_state.curr_state.nodes.append(new_node)
 
-        edge_id = f"{clicked_node.id}-{child_id}"
+        edge_id = f"{clicked_node.id}-{child_path}"
         st.session_state.curr_state.edges.append(
-            StreamlitFlowEdge(edge_id, clicked_node.id, child_id, animated=True)
+            StreamlitFlowEdge(edge_id, clicked_node.id, child_path, animated=True)
         )
 
-        # Mark parent as expanded
-        st.session_state.expanded_nodes.add(clicked_node.id)
+    # 2) Mark this node as expanded
+    st.session_state.expanded_nodes.add(clicked_node.id)
 
-        # log the parent's question if not already
-        parent_section = clicked_node.data["section_path"]
-        existing_paths = [q["section"] for q in st.session_state.clicked_questions]
-        if parent_section not in existing_paths:
-            st.session_state.clicked_questions.append({
-                "section": parent_section,
-                "short_label": clicked_node.data.get("short_label", "ROOT"),
-                "full_question": "Root node expanded"
-            })
+    # 3) Log that we've expanded the ROOT (once)
+    parent_section = parent_path
+    existing = [q["section"] for q in st.session_state.clicked_questions]
+    if parent_section not in existing:
+        st.session_state.clicked_questions.append({
+            "section": parent_section,
+            "short_label": clicked_node.data.get("short_label", "ROOT"),
+            "full_question": "Root node expanded"
+        })
+
 
 def expand_node_with_questions(clicked_node):
     """
-    1) Figure out the parent's context. If it's the root, context = dataset metadata.
-       Otherwise, context = parent's full question.
-    2) Generate 4 new questions via the ensemble approach.
-    3) Paraphrase them for short labels.
-    4) Create child nodes labeled with the parent's section_path + .1, .2, .3, .4.
-    5) Connect them in the flow.
-    6) Mark the parent node as expanded.
-    7) Log the parent's full question in st.session_state.clicked_questions.
+    Expand any thematic node into 4 EDA‑style questions that
+    consider both numeric and categorical columns.
     """
-    # 1) Get parent's full_question if it exists, else fallback to dataset metadata
-    parent_full_question = clicked_node.data.get("full_question", "")
-    if not parent_full_question:
-        # Probably the root node
-        parent_full_question = f"(Root) Dataset Metadata:\n{st.session_state.metadata_string}"
+    # 1) Determine theme (e.g. "Histogram", "Bar Chart", etc.)
+    theme = clicked_node.data.get("full_question", "")
 
-    # 2) Generate 3 sets of questions & pick the top 4
-    q1, q2, q3 = generate_multiple_question_sets(parent_full_question)
+    # 2) Build a rich metadata string including cat & num cols
+    df = st.session_state.df
+    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    categorical_cols = df.select_dtypes(include=['object', 'category', 'bool']).columns.tolist()
+    metadata_string = (
+        f"Numeric columns: {numeric_cols}\n"
+        f"Categorical columns: {categorical_cols}\n"
+        f"Row count: {df.shape[0]}"
+    )
+
+    # 3) Assemble the LLM context: theme + full metadata
+    context = f"Theme: {theme}\n\nDataset metadata:\n{metadata_string}"
+
+    # 4) Generate 3 question‐sets & pick the top 4
+    q1, q2, q3 = generate_multiple_question_sets(context)
     top_questions = identify_common_questions(q1, q2, q3)
-
-    # 3) Paraphrase them for short node labels
     short_labels = paraphrase_questions(top_questions)
 
-    # 4) Create the child nodes. Derive their section paths
-    parent_path = clicked_node.data.get("section_path", "S0")  # Root is "S0" by default
-    child_paths = get_section_path_children(parent_path, num_children=4)
-
+    # 5) Create child nodes for each question
+    parent_path = clicked_node.data.get("section_path", "S0")
+    child_paths = get_section_path_children(parent_path, num_children=len(top_questions))
     for i, child_path in enumerate(child_paths):
-        # For each new question, create a node
-        new_node_id = child_path  # We'll also use it for the node ID
+        full_q = top_questions[i]
+        label = short_labels[i]
         color = get_color_for_depth(child_path)
 
-        child_full_question = top_questions[i] if i < len(top_questions) else "N/A"
-        child_short_label = short_labels[i] if i < len(short_labels) else child_full_question[:30]
+        node_data = {
+            "section_path": child_path,
+            "short_label": label,
+            "full_question": full_q,
+            "content": f"**{label}**"
+        }
 
         new_node = StreamlitFlowNode(
-            new_node_id,
+            child_path,
             (random.randint(-100, 100), random.randint(-100, 100)),
-            {
-                "section_path": child_path,
-                "short_label": child_short_label,
-                "full_question": child_full_question,
-
-                # This is the key part:
-                # Set the node's displayed text to your short label.
-                "content": f"**{child_short_label}**"
-            },
+            node_data,
             "default",
             "right",
             "left",
             style={"backgroundColor": color}
         )
-
-        # Add to state
         st.session_state.curr_state.nodes.append(new_node)
-        edge_id = f"{clicked_node.id}-{new_node_id}"
         st.session_state.curr_state.edges.append(
-            StreamlitFlowEdge(edge_id, clicked_node.id, new_node_id, animated=True)
+            StreamlitFlowEdge(f"{clicked_node.id}-{child_path}", clicked_node.id, child_path, animated=True)
         )
 
-    # 5) Mark as expanded
-    st.session_state.expanded_nodes.add(clicked_node.id)
-
-    # 6) Log the parent's question if not already
-    #    (So we can see which node was clicked in a table at the bottom.)
-    #    Avoid duplicates if user repeatedly clicks the same node (shouldn't happen with 'expanded_nodes', but just in case).
-    existing_paths = [q["section"] for q in st.session_state.clicked_questions]
-    if parent_path not in existing_paths:
+    # 6) Mark as expanded & log the click
+    st.session_state.expanded_nodes.add(clicked_node.data["section_path"])
+    if parent_path not in {q["section"] for q in st.session_state.clicked_questions}:
         st.session_state.clicked_questions.append({
             "section": parent_path,
-            "short_label": clicked_node.data.get("short_label", clicked_node.data.get("content", parent_path)),
-            "full_question": parent_full_question
+            "short_label": clicked_node.data.get("short_label", parent_path),
+            "full_question": theme
         })
 
 # ######################### Data Charting and Table Viz function ######################### #
@@ -571,12 +560,25 @@ if __name__ == "__main__":
                 st.session_state.df = df
                 st.session_state["DATA_RAW"] = df
                 st.session_state.df_preview = df.head()
-                st.session_state.df_summary = df.describe()
+                # st.session_state.df_summary = df.describe()
 
                 # Save dataset name without extension
                 dataset_name = uploaded_file.name.rsplit('.', 1)[0]
                 st.session_state['dataset_name'] = dataset_name
-                st.write(dataset_name)
+                # st.write(dataset_name)
+
+
+                # numeric + categorical summary
+                numeric_summary = df.describe()
+                cat_summary = df.describe(include=['object', 'category', 'bool'])
+                # build a richer metadata string
+                st.session_state.df_summary = numeric_summary  # keep for display
+                cols = df.columns.tolist()
+                numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+                categorical_cols = df.select_dtypes(include=['object', 'category', 'bool']).columns.tolist()
+                cat_cardinalities = {c: int(df[c].nunique()) for c in categorical_cols}
+                top_cats = {c: df[c].value_counts().head(3).to_dict() for c in categorical_cols}
+
 
                 # Rebuild a 'metadata_string' for the root node
                 if st.session_state.df_summary is not None:
@@ -585,8 +587,10 @@ if __name__ == "__main__":
                     row_count = st.session_state.df.shape[0]
                     st.session_state.metadata_string = (
                         f"Columns: {cols}\n"
-                        f"Total Rows: {row_count}\n"
-                        f"Summary Stats:\n{st.session_state.df_summary}"
+                        f"Numeric columns: {numeric_cols}\n"
+                        f"Categorical columns: {categorical_cols} (cardinalities: {cat_cardinalities})\n"
+                        f"Top categories: {top_cats}\n"
+                        f"Row count: {len(df)}"
                     )
 
                     # Produce a one-sentence question describing the dataset
