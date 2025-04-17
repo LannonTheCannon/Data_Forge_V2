@@ -86,7 +86,7 @@ def generate_root_summary_question(metadata_string: str) -> str:
 
     try:
         response = openai.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4.1-mini",
             messages=messages,
             max_tokens=50  # Enough for a short response
         )
@@ -579,7 +579,6 @@ if __name__ == "__main__":
                 cat_cardinalities = {c: int(df[c].nunique()) for c in categorical_cols}
                 top_cats = {c: df[c].value_counts().head(3).to_dict() for c in categorical_cols}
 
-
                 # Rebuild a 'metadata_string' for the root node
                 if st.session_state.df_summary is not None:
                     # Basic example of turning summary + columns into a string
@@ -592,7 +591,7 @@ if __name__ == "__main__":
                         f"Top categories: {top_cats}\n"
                         f"Row count: {len(df)}"
                     )
-
+                    print(st.session_state.metadata_string)
                     # Produce a one-sentence question describing the dataset
                     root_question = generate_root_summary_question(st.session_state.metadata_string)
 
@@ -684,7 +683,7 @@ if __name__ == "__main__":
         if len(msgs.messages) == 0:
             msgs.add_ai_message("IMPORTANT: For best results use this formula -> Create a [chart] of the [field] on the y-axis (aggregation) and the [field] on the x-axis and make the chart [color].")
         if 'pandas_data_analyst' not in st.session_state:
-            model = ChatOpenAI(model='gpt-4.1-nano', api_key=st.secrets['OPENAI_API_KEY'])
+            model = ChatOpenAI(model='gpt-4.1', api_key=st.secrets['OPENAI_API_KEY'])
             st.session_state.pandas_data_analyst = PandasDataAnalyst(
                 model=model,
                 data_wrangling_agent=DataWranglingAgent(model=model,
@@ -707,11 +706,11 @@ if __name__ == "__main__":
         # print(interpretation)
 
         if question:
-            msgs.add_user_message(interpretation)
+            msgs.add_user_message(question)
             with st.spinner("Thinking..."):
                 try:
                     st.session_state.pandas_data_analyst.invoke_agent(
-                        user_instructions=interpretation,
+                        user_instructions=question,
                         data_raw=st.session_state["DATA_RAW"]
                     )
                     result = st.session_state.pandas_data_analyst.get_response()
