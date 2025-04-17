@@ -133,7 +133,7 @@ Your task is to propose **exactly FOUR** analysis tasks that can each be turned 
    • Scatter + LOESS / best‑fit line  
    • Box plot (numeric‑by‑categorical)  
    • Heat‑map (correlation or contingency table)  
-   • Violin / Strip plot (optional if box plot is unsuitable)
+   • Violin / Strip plot 
    
    Only use ONE chart if the dataset’s columns make sense for it, create table of 
    INSIGHT if not. Make sure you are explicit in saying "generate a table" if you are look for a key 
@@ -300,7 +300,6 @@ def expand_root_node(clicked_node):
             "short_label": clicked_node.data.get("short_label", "ROOT"),
             "full_question": "Root node expanded"
         })
-
 
 def expand_node_with_questions(clicked_node):
     """
@@ -553,7 +552,7 @@ if __name__ == "__main__":
                         f"Top categories: {top_cats}\n"
                         f"Row count: {len(df)}"
                     )
-                    print(st.session_state.metadata_string)
+                    # print(st.session_state.metadata_string)
                     # Produce a one-sentence question describing the dataset
                     root_question = generate_root_summary_question(st.session_state.metadata_string)
 
@@ -629,8 +628,11 @@ if __name__ == "__main__":
 
                 if node_type == "root":
                     expand_root_node(clicked_node)
+                    print('root node clicked')
+
                 else:
                     expand_node_with_questions(clicked_node)
+                    print('Expander node clicked')
 
             st.rerun()
         # Display a table of all clicked questions so far
@@ -701,7 +703,7 @@ if __name__ == "__main__":
                             "code": combined_code
                         })
                         # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-                        print(result['data_visualization_function'])
+                        # print(result['data_visualization_function'])
 
                     elif route == "table":
                         df = result.get("data_wrangled")
