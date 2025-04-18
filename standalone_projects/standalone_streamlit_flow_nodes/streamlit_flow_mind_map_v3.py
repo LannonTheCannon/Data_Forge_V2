@@ -35,6 +35,7 @@ for key in ["chart_path", "df", "df_preview", "df_summary", "metadata_string", "
             st.session_state[key] = None
         else:
             st.session_state[key] = []
+
 class MindMapNode:
     def __init__(
         self,

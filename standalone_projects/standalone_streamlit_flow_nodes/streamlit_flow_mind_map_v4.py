@@ -10,7 +10,7 @@ import numpy as np
 import openai
 from mindmap_config import CATEGORY_CFG, sample_categories
 import re
-from nodes import BaseNode, ThemeNode, QuestionNode, TerminalNode
+from node_template import BaseNode, ThemeNode, QuestionNode, TerminalNode
 
 st.set_page_config(page_title="Advanced PandasAI + Vision Demo", layout="wide")
 client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
@@ -21,28 +21,31 @@ if "curr_state" not in st.session_state:
     # Prepare root node. We'll store the dataset metadata in "full_question" if we have it.
     dataset_label = st.session_state.get("dataset_name", "Dataset")
 
-    # We'll call it "S0" for the section path.
-    root_node = StreamlitFlowNode(
-        "S0",
-        (0, 0),
-        {
-            "section_path": "S0",
-            "short_label": "ROOT",
-            "full_question": "",  # We'll fill in once we have metadata
-            "content": dataset_label
-        },
-        "input",
-        "right",
-        style={"backgroundColor": COLOR_PALETTE[0]}
+    root_theme = ThemeNode(
+        node_id="S0",
+        label="ROOT",
+        full_question="Overview of the dataset",
+        category="Meta",
+        node_type="theme",
+        parent_id=None,
+        color=COLOR_PALETTE[0],
+        metadata={"content": dataset_label}
     )
-    st.session_state.curr_state = StreamlitFlowState(nodes=[root_node], edges=[])
-    st.session_state.expanded_nodes = set()
+
+    st.session_state.mindmap_nodes = {"S0": root_theme}
+    st.session_state.curr_state = StreamlitFlowState(
+        nodes=[root_theme.to_streamlit_node()],
+        edges=[]
+    )
 
 for key in ["chart_path", "df", "df_preview", "df_summary", "metadata_string", "saved_charts", "DATA_RAW", "plots",
-            "dataframes", "msg_index", "clicked_questions", "dataset_name", "expanded_nodes"]:
+            "dataframes", "msg_index", "clicked_questions", "dataset_name"]:
     if key not in st.session_state:
-        st.session_state[key] = None if key in ["chart_path", "df", "df_preview", "df_summary", "metadata_string",
-                                                "DATA_RAW"] else []
+        st.session_state[key] = None if key in ["chart_path", "df", "df_preview", "df_summary", "metadata_string", "DATA_RAW"] else []
+
+# Set type for expanded_nodes properly
+if "expanded_nodes" not in st.session_state:
+    st.session_state.expanded_nodes = set()
 
 
 def load_data(uploaded_file):
@@ -467,25 +470,62 @@ if __name__ == "__main__":
             show_minimap=False
         )
 
-        # If a node was clicked, expand it (if not already expanded)
+        # ------------------ Mind Map Node Click Event Handler ------------------
+
         clicked_node_id = st.session_state.curr_state.selected_id
+
         if clicked_node_id and clicked_node_id not in st.session_state.expanded_nodes:
-            node_map = {n.id: n for n in st.session_state.curr_state.nodes}
-            clicked_node = node_map.get(clicked_node_id)
-            if clicked_node:
-                node_type = clicked_node.data.get("node_type", "")
+            st.write("👉 Node clicked:", clicked_node_id)
 
-                if node_type == "root":
-                    expand_root_node(clicked_node)
-                    print('root node clicked')
+            # Get the corresponding object from our mindmap node registry
+            clicked_obj = st.session_state.mindmap_nodes.get(clicked_node_id)
 
-                else:
-                    expand_node_with_questions(clicked_node)
-                    print('Expander node clicked')
+            # Log for debugging
+            st.write("📌 All registered node IDs:", list(st.session_state.mindmap_nodes.keys()))
+            st.write("📌 Already expanded nodes:", st.session_state.expanded_nodes)
 
-            st.rerun()
-        # Display a table of all clicked questions so far
+            if not clicked_obj:
+                st.warning(f"⚠️ Node '{clicked_node_id}' not found in mindmap_nodes.")
+            elif not clicked_obj.can_expand():
+                st.info(f"ℹ️ Node '{clicked_node_id}' is a terminal node or already expanded.")
+            else:
+                # ✅ Generate children using the class-specific logic
+                children = clicked_obj.get_children(
+                    openai_client=client,
+                    metadata_string=st.session_state.metadata_string
+                )
+
+                for child in children:
+                    st.session_state.mindmap_nodes[child.node_id] = child  # 🔑 Register it to mindmap dict
+                    st.session_state.curr_state.nodes.append(child.to_streamlit_node())
+                    st.session_state.curr_state.edges.append(
+                        StreamlitFlowEdge(
+                            f"{clicked_obj.node_id}-{child.node_id}",
+                            clicked_obj.node_id,
+                            child.node_id,
+                            animated=True
+                        )
+                    )
+
+                # ✅ Mark this as expanded
+                clicked_obj.mark_expanded()
+                st.session_state.expanded_nodes.add(clicked_node_id)
+
+                # ✅ Log the click
+                st.session_state.clicked_questions.append({
+                    "section": clicked_obj.node_id,
+                    "short_label": clicked_obj.label,
+                    "full_question": clicked_obj.full_question,
+                    "node_type": clicked_obj.node_type
+                })
+
+                # 🔁 Re-render
+                st.rerun()
+
+        # ------------------ Display User Click History ------------------
+
         if st.session_state.clicked_questions:
-            st.write("## Questions Clicked So Far")
+            st.write("## Clicked Nodes (User's Exploration Path)")
             df_log = pd.DataFrame(st.session_state.clicked_questions)
+            df_log = df_log[["section", "short_label", "node_type", "full_question"]]
             st.table(df_log)
