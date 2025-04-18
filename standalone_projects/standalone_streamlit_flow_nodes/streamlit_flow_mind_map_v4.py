@@ -1,119 +1,49 @@
-import numpy as np
-import openai
 import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
-import streamlit as st
-import json
-from code_editor import code_editor
-import plotly.graph_objects as go
-import plotly.io as pio
-from langchain_community.chat_message_histories import StreamlitChatMessageHistory
-from langchain_openai import ChatOpenAI
-from ai_data_science_team.ds_agents import EDAToolsAgent
-from ai_data_science_team import PandasDataAnalyst, DataWranglingAgent, DataVisualizationAgent
 import streamlit as st
 from streamlit_flow import streamlit_flow
 from streamlit_flow.elements import StreamlitFlowNode, StreamlitFlowEdge
 from streamlit_flow.state import StreamlitFlowState
-from streamlit_flow.layouts import ManualLayout, RadialLayout, TreeLayout
+from streamlit_flow.layouts import TreeLayout
 import random
-# from standalone_projects.standalone_streamlit_flow_nodes.basic_streamlit_flow_nodes_4 import COLOR_PALETTE
+import numpy as np
+# from standalone_projects.standalone_streamlit_flow_nodes.mindmap_config import sample_categories, CATEGORY_CFG
+import openai
+from mindmap_config import CATEGORY_CFG, sample_categories
+import re
+from nodes import BaseNode, ThemeNode, QuestionNode, TerminalNode
 
 st.set_page_config(page_title="Advanced PandasAI + Vision Demo", layout="wide")
 client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 COLOR_PALETTE = ["#FF6B6B", "#6BCB77", "#4D96FF", "#FFD93D", "#845EC2", "#F9A826"]
 
-for key in ["chart_path", "df", "df_preview", "df_summary", "metadata_string", "saved_charts", "DATA_RAW", "plots",
-            "dataframes", "msg_index", "clicked_questions", "dataset_name", "expanded_nodes", "mindmap_nodes"]:
-
-    if key not in st.session_state:
-        if key == "mindmap_nodes":
-            st.session_state[key] = {}  # ✅ FIX: dictionary for object lookup
-        elif key in ["chart_path", "df", "df_preview", "df_summary", "metadata_string", "DATA_RAW"]:
-            st.session_state[key] = None
-        else:
-            st.session_state[key] = []
-class MindMapNode:
-    def __init__(
-        self,
-        node_id: str,
-        label: str,
-        full_question: str,
-        category: str,
-        node_type: str,
-        payload: str = "",
-        parent_id: str = None,
-        color: str = "#6BCB77"
-    ):
-        self.node_id = node_id
-        self.label = label
-        self.full_question = full_question
-        self.category = category  # Distribution, Correlation, etc.
-        self.node_type = node_type  # intent, exploratory, conclusive
-        self.payload = payload
-        self.parent_id = parent_id
-        self.color = color
-        self.expanded = False
-
-    def mark_expanded(self):
-        self.expanded = True
-
-    def is_conclusive(self):
-        return self.node_type == "conclusive"
-
-    def can_expand(self):
-        return not self.expanded and not self.is_conclusive()
-
-    def to_streamlit_node(self):
-        from streamlit_flow.elements import StreamlitFlowNode
-        return StreamlitFlowNode(
-            self.node_id,
-            (random.randint(-100, 100), random.randint(-100, 100)),
-            {
-                "section_path": self.node_id,
-                "short_label": self.label,
-                "full_question": self.full_question,
-                "category": self.category,
-                "node_type": self.node_type,
-                "payload": self.payload,
-                "content": f"**{self.label}**"
-            },
-            "default",
-            "right",
-            "left",
-            style={"backgroundColor": self.color}
-        )
-
 if "curr_state" not in st.session_state:
     # Prepare root node. We'll store the dataset metadata in "full_question" if we have it.
     dataset_label = st.session_state.get("dataset_name", "Dataset")
 
-    root_id = "S0"
-    root_mindmap_node = MindMapNode(
-        node_id=root_id,
-        label="ROOT",
-        full_question="Overview of the dataset",
-        category="Meta",
-        node_type="root",
-        color=COLOR_PALETTE[0]
+    # We'll call it "S0" for the section path.
+    root_node = StreamlitFlowNode(
+        "S0",
+        (0, 0),
+        {
+            "section_path": "S0",
+            "short_label": "ROOT",
+            "full_question": "",  # We'll fill in once we have metadata
+            "content": dataset_label
+        },
+        "input",
+        "right",
+        style={"backgroundColor": COLOR_PALETTE[0]}
     )
-
-    # Register in memory
-    st.session_state.mindmap_nodes[root_id] = root_mindmap_node
-
-    # Add to Streamlit flow
-    st.session_state.curr_state = StreamlitFlowState(
-        nodes=[root_mindmap_node.to_streamlit_node()],
-        edges=[]
-    )
+    st.session_state.curr_state = StreamlitFlowState(nodes=[root_node], edges=[])
     st.session_state.expanded_nodes = set()
 
+for key in ["chart_path", "df", "df_preview", "df_summary", "metadata_string", "saved_charts", "DATA_RAW", "plots",
+            "dataframes", "msg_index", "clicked_questions", "dataset_name", "expanded_nodes"]:
+    if key not in st.session_state:
+        st.session_state[key] = None if key in ["chart_path", "df", "df_preview", "df_summary", "metadata_string",
+                                                "DATA_RAW"] else []
 
-
-
-# ######################### Data Upload function ######################### #
 
 def load_data(uploaded_file):
     if uploaded_file is not None:
@@ -308,115 +238,121 @@ def get_color_for_depth(section_path: str):
     depth = section_path.count(".")
     return COLOR_PALETTE[depth % len(COLOR_PALETTE)]
 
-def infer_category_from_prompt(prompt: str) -> str:
-    prompt = prompt.lower()
-    if "scatter" in prompt: return "Correlation"
-    if "line chart" in prompt: return "Trend"
-    if "box" in prompt: return "Outlier"
-    if "bar" in prompt and "grouped" in prompt: return "Comparison"
-    if "bar" in prompt: return "Distribution"
-    if "heatmap" in prompt: return "Correlation"
-    return "Meta"
-
 
 # XXXXXXXXXXXXXXXXXXXXXXXXXXXXX Expanding Node with Questions Function XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX #
 
 def expand_root_node(clicked_node):
+    """
+    Expand the ROOT node into EDA archetype themes:
+    Histogram, Bar Chart, Scatter Plot, Box Plot, Heatmap, Pivot Table.
+    """
     themes = [
-        ("Distribution", "Explore distributions of numeric columns"),
-        ("Comparison", "Compare categories using counts or averages"),
-        ("Correlation", "Analyze relationships between numeric features"),
-        ("Outlier", "Identify extreme values or unusual groups"),
-        ("Trend", "Visualize changes over time or order"),
-        ("Relationship", "Explore multi-variable relationships"),
+        ("Histogram", "#FF6B6B"),
+        ("Bar Chart", "#6BCB77"),
+        ("Scatter Plot", "#4D96FF"),
+        ("Box Plot", "#FFD93D"),
+        ("Heatmap", "#845EC2"),
+        ("Pivot Table", "#F9A826"),
     ]
 
-    parent_path = clicked_node.node_id
+    parent_path = clicked_node.data["section_path"]
 
-    for idx, (category, full_question) in enumerate(themes, start=1):
+    # 1) Create one child node per theme
+    for idx, (theme_label, color) in enumerate(themes, start=1):
         child_path = f"{parent_path}.{idx}"
-        label = category  # short label
-        color = COLOR_PALETTE[idx % len(COLOR_PALETTE)]
+        node_data = {
+            "section_path": child_path,
+            "short_label": theme_label,
+            "full_question": theme_label,  # use the theme as the query context
+            "content": f"**{theme_label}**",
+            "node_type": "thematic"
+        }
 
-        node = MindMapNode(
-            node_id=child_path,
-            label=label,
-            full_question=full_question,  # << more informative prompt
-            category=category,
-            node_type="thematic",
-            parent_id=parent_path,
-            color=color
+        new_node = StreamlitFlowNode(
+            child_path,
+            (random.randint(-100, 100), random.randint(-100, 100)),
+            node_data,
+            "default",  # node shape/type
+            "right",  # target handle position
+            "left",  # source handle position
+            style={"backgroundColor": color}
         )
+        st.session_state.curr_state.nodes.append(new_node)
 
-        st.session_state.mindmap_nodes[child_path] = node
-        st.session_state.curr_state.nodes.append(node.to_streamlit_node())
+        edge_id = f"{clicked_node.id}-{child_path}"
         st.session_state.curr_state.edges.append(
-            StreamlitFlowEdge(f"{parent_path}-{child_path}", parent_path, child_path, animated=True)
+            StreamlitFlowEdge(edge_id, clicked_node.id, child_path, animated=True)
         )
 
-    clicked_node.mark_expanded()
-    st.session_state.expanded_nodes.add(parent_path)
+    # 2) Mark this node as expanded
+    st.session_state.expanded_nodes.add(clicked_node.id)
 
-    # Optional: log this click for downstream insights
-    st.session_state.clicked_questions.append({
-        "section": parent_path,
-        "short_label": clicked_node.label,
-        "full_question": "Root node expanded"
-    })
+    # 3) Log that we've expanded the ROOT (once)
+    parent_section = parent_path
+    existing = [q["section"] for q in st.session_state.clicked_questions]
+    if parent_section not in existing:
+        st.session_state.clicked_questions.append({
+            "section": parent_section,
+            "short_label": clicked_node.data.get("short_label", "ROOT"),
+            "full_question": "Root node expanded"
+        })
 
 
 def expand_node_with_questions(clicked_node):
     """
-    Expand a thematic node (e.g. Distribution, Trend) into 4 EDA-style analysis questions.
+    Expand any thematic node into 4 EDA‑style questions that
+    consider both numeric and categorical columns.
     """
-    theme = clicked_node.full_question
-    parent_path = clicked_node.node_id
+    # 1) Determine theme (e.g. "Histogram", "Bar Chart", etc.)
+    theme = clicked_node.data.get("full_question", "")
 
     context = f"Theme: {theme}\n\nDataset metadata:\n{st.session_state.metadata_string}"
-    questions = get_list_questions(context)
-    short_labels = paraphrase_questions(questions)
+    q1 = get_list_questions(context)
+    short_labels = paraphrase_questions(q1)
 
-    child_paths = get_section_path_children(parent_path, len(questions))
-
+    # 5) Create child nodes for each question
+    parent_path = clicked_node.data.get("section_path", "S0")
+    child_paths = get_section_path_children(parent_path, num_children=len(q1))
     for i, child_path in enumerate(child_paths):
-        full_q = questions[i]
+        full_q = q1[i]
         label = short_labels[i]
-        category = infer_category_from_prompt(full_q)
         color = get_color_for_depth(child_path)
 
-        node = MindMapNode(
-            node_id=child_path,
-            label=label,
-            full_question=full_q,
-            category=category,
-            node_type="exploratory",
-            payload="",  # you can extract chart-type/X/Y later
-            parent_id=parent_path,
-            color=color
-        )
+        node_data = {
+            "section_path": child_path,
+            "short_label": label,
+            "full_question": full_q,
+            "content": f"**{label}**"
+        }
 
-        # Register and visualize
-        st.session_state.mindmap_nodes[child_path] = node
-        st.session_state.curr_state.nodes.append(node.to_streamlit_node())
+        new_node = StreamlitFlowNode(
+            child_path,
+            (random.randint(-100, 100), random.randint(-100, 100)),
+            node_data,
+            "default",
+            "right",
+            "left",
+            style={"backgroundColor": color}
+        )
+        st.session_state.curr_state.nodes.append(new_node)
         st.session_state.curr_state.edges.append(
-            StreamlitFlowEdge(f"{parent_path}-{child_path}", parent_path, child_path, animated=True)
+            StreamlitFlowEdge(f"{clicked_node.id}-{child_path}", clicked_node.id, child_path, animated=True)
         )
 
-    clicked_node.mark_expanded()
-    st.session_state.expanded_nodes.add(parent_path)
-
-    # Optional: log this click
+    # 6) Mark as expanded & log the click
+    st.session_state.expanded_nodes.add(clicked_node.data["section_path"])
     if parent_path not in {q["section"] for q in st.session_state.clicked_questions}:
         st.session_state.clicked_questions.append({
             "section": parent_path,
-            "short_label": clicked_node.label,
-            "full_question": clicked_node.full_question
+            "short_label": clicked_node.data.get("short_label", parent_path),
+            "full_question": theme
         })
-
 
 PAGE_OPTIONS = [
     'Data Upload',
     'Mind Mapping',
+    'Data Analyst',
+    'Data Storytelling'
 ]
 
 page = st.sidebar.radio('Select a Page', PAGE_OPTIONS)
@@ -533,19 +469,19 @@ if __name__ == "__main__":
 
         # If a node was clicked, expand it (if not already expanded)
         clicked_node_id = st.session_state.curr_state.selected_id
-        clicked_node = st.session_state.mindmap_nodes.get(clicked_node_id)
-
         if clicked_node_id and clicked_node_id not in st.session_state.expanded_nodes:
-            clicked_node = st.session_state.mindmap_nodes.get(clicked_node_id)
+            node_map = {n.id: n for n in st.session_state.curr_state.nodes}
+            clicked_node = node_map.get(clicked_node_id)
+            if clicked_node:
+                node_type = clicked_node.data.get("node_type", "")
 
-            # ✅ check if the node exists in your map
-            if clicked_node is not None and clicked_node.can_expand():
-                if clicked_node.node_type == "root":
+                if node_type == "root":
                     expand_root_node(clicked_node)
+                    print('root node clicked')
+
                 else:
                     expand_node_with_questions(clicked_node)
-                clicked_node.mark_expanded()
-                st.session_state.expanded_nodes.add(clicked_node_id)
+                    print('Expander node clicked')
 
             st.rerun()
         # Display a table of all clicked questions so far
