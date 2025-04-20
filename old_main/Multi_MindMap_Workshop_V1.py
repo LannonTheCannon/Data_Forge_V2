@@ -25,29 +25,35 @@ client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 COLOR_PALETTE = ["#FF6B6B", "#6BCB77", "#4D96FF", "#FFD93D", "#845EC2", "#F9A826"]
 
+# ##################### SESSION STATE STUFF ####################### #
+
 if "curr_state" not in st.session_state:
     # Prepare root node. We'll store the dataset metadata in "full_question" if we have it.
     dataset_label = st.session_state.get("dataset_name", "Dataset")
 
-    # We'll call it "S0" for the section path.
-    root_node = StreamlitFlowNode(
-        "S0",
-        (0, 0),
-        {
-            "section_path": "S0",
-            "short_label": "ROOT",
-            "full_question": "",  # We'll fill in once we have metadata
-            "content": dataset_label
-        },
-        "input",
-        "right",
-        style={"backgroundColor": COLOR_PALETTE[0]}
+    root_theme = ThemeNode(
+        node_id="S0",
+        label="ROOT",
+        full_question="Overview of the dataset",
+        category="Meta",
+        node_type="theme",
+        parent_id=None,
+        metadata={"content": dataset_label}
     )
-    st.session_state.curr_state = StreamlitFlowState(nodes=[root_node], edges=[])
-    st.session_state.expanded_nodes = set()
+
+    st.session_state.mindmap_nodes = {"S0": root_theme}
+    st.session_state.curr_state = StreamlitFlowState(
+        nodes=[root_theme.to_streamlit_node()],
+        edges=[]
+    )
 
 for key in ["chart_path", "df", "df_preview", "df_summary", "metadata_string", "saved_charts", "DATA_RAW", "plots",
-            "dataframes", "msg_index", "clicked_questions", "dataset_name", "expanded_nodes"]:
+            "dataframes", "msg_index", "clicked_questions", "dataset_name"]:
     if key not in st.session_state:
-        st.session_state[key] = None if key in ["chart_path", "df", "df_preview", "df_summary", "metadata_string",
-                                                "DATA_RAW"] else []
+        st.session_state[key] = None if key in ["chart_path", "df", "df_preview", "df_summary", "metadata_string", "DATA_RAW"] else []
+
+if "expanded_nodes" not in st.session_state:
+    st.session_state.expanded_nodes = set()
+
+if "seen_embeddings" not in st.session_state:
+    st.session_state.seen_embeddings = []
