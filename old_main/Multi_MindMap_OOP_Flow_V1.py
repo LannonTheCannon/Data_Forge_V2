@@ -171,10 +171,39 @@ def display_chat_history():
                     output_key = f"output_chart_{unique_key}"
 
                     with st.expander(f"\U0001F4CE {artifact['title']}", expanded=True):
-                        tabs = st.tabs(["📊 Output", "💻 Code"])
+                        tabs = st.tabs(["📊 Output", "📋 Data Preview", "💻 Code"])
 
                         # --- Code Tab First, to capture edits and trigger updates ---
+                        with tabs[0]:
+                            output_obj = st.session_state.get(output_key, artifact.get("data"))
+                            render_type = artifact.get("render_type")
+
+                            if isinstance(output_obj, dict) and "data" in output_obj and "layout" in output_obj:
+                                output_obj = pio.from_json(json.dumps(output_obj))
+
+                            if render_type == "plotly":
+                                st.plotly_chart(
+                                    output_obj,
+                                    use_container_width=True,
+                                    config={
+                                        "displayModeBar": True,
+                                        "scrollZoom": True,
+                                        "displaylogo": False
+                                    },
+                                    key=f"plotly_{output_key}"
+                                )
+                            elif render_type == "dataframe":
+                                st.dataframe(output_obj, key=f"df_{output_key}")
+                            else:
+                                st.write(output_obj)
                         with tabs[1]:
+                            df_preview = artifact.get("data_preview")
+                            if df_preview is not None:
+                                st.write("### Data‑Wrangler Output")
+                                st.dataframe(df_preview, use_container_width=True)
+                            else:
+                                st.write("_No data preview available._")
+                        with tabs[2]:
                             code_before = st.session_state.get(editor_key, artifact.get("code", ""))
                             editor_response = code_editor(
                                 code=code_before,
@@ -229,29 +258,6 @@ def display_chat_history():
                                 except Exception as e:
                                     st.error(f"Error executing code: {e}")
 
-                        # --- Output Tab ---
-                        with tabs[0]:
-                            output_obj = st.session_state.get(output_key, artifact.get("data"))
-                            render_type = artifact.get("render_type")
-
-                            if isinstance(output_obj, dict) and "data" in output_obj and "layout" in output_obj:
-                                output_obj = pio.from_json(json.dumps(output_obj))
-
-                            if render_type == "plotly":
-                                st.plotly_chart(
-                                    output_obj,
-                                    use_container_width=True,
-                                    config={
-                                        "displayModeBar": True,
-                                        "scrollZoom": True,
-                                        "displaylogo": False
-                                    },
-                                    key=f"plotly_{output_key}"
-                                )
-                            elif render_type == "dataframe":
-                                st.dataframe(output_obj, key=f"df_{output_key}")
-                            else:
-                                st.write(output_obj)
 
 PAGE_OPTIONS = [
     'Data Upload',
@@ -481,6 +487,7 @@ if __name__ == "__main__":
                         # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
                         viz_code = result.get('data_visualization_function', "")
                         wrangle_code = result.get('data_wrangler_function', "")
+                        df_wrangled  = result.get('data_wrangled')
 
                         # Combine both functions into one code block
                         combined_code = f"{wrangle_code}\n\n{viz_code}\n\n# Runtime Execution\noutput = data_visualization(data_wrangler([df]))"
@@ -489,7 +496,8 @@ if __name__ == "__main__":
                             "title": "Chart",
                             "render_type": "plotly",
                             "data": plot_obj,
-                            "code": combined_code
+                            "code": combined_code,
+                            "data_preview": df_wrangled
                         })
                         # +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
                         # print(result['data_visualization_function'])
