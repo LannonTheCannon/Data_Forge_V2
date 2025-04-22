@@ -19,6 +19,8 @@ from streamlit_flow.state import StreamlitFlowState
 from streamlit_flow.layouts import ManualLayout, RadialLayout, TreeLayout
 import random
 # from standalone_projects.standalone_streamlit_flow_nodes.basic_streamlit_flow_nodes_4 import COLOR_PALETTE
+from node_template import ThemeNode, QuestionNode, TerminalNode
+
 
 st.set_page_config(page_title="Advanced PandasAI + Vision Demo", layout="wide")
 client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])

@@ -1,4 +1,3 @@
-
 from node_template import BaseNode, ThemeNode, QuestionNode, TerminalNode
 import numpy as np
 import openai
@@ -203,6 +202,7 @@ def display_chat_history():
                                 st.dataframe(df_preview, use_container_width=True)
                             else:
                                 st.write("_No data preview available._")
+
                         with tabs[2]:
                             code_before = st.session_state.get(editor_key, artifact.get("code", ""))
                             editor_response = code_editor(
@@ -210,53 +210,56 @@ def display_chat_history():
                                 lang="python",
                                 theme="dracula",
                                 height=300,
-                                buttons=[
-                                    {
-                                        "name": "Run",
-                                        "feather": "Play",
-                                        "primary": True,
-                                        "hasText": True,
-                                        "showWithIcon": True,
-                                        "commands": ["submit"],
-                                        "style": {"bottom": "0.44rem", "right": "0.4rem"}
-                                    }
-                                ],
+                                # buttons=[
+                                #     {
+                                #         "name": "Run",
+                                #         "feather": "Play",
+                                #         "primary": True,
+                                #         "hasText": True,
+                                #         "showWithIcon": True,
+                                #         "commands": ["submit"],
+                                #         "style": {"bottom": "0.44rem", "right": "0.4rem"}
+                                #     }
+                                # ],
                                 key=f"code_editor_{unique_key}"
                             )
 
                             new_code = editor_response.get("text", "").strip()
 
-                            # Only run if the code has changed
-                            if new_code and new_code != st.session_state.get(editor_key):
-                                try:
-                                    exec_globals = {
-                                        "df": st.session_state.df,
-                                        "pd": pd,
-                                        "np": np,
-                                        "sns": sns,
-                                        "go": go,
-                                        "plt": plt,
-                                        "pio": pio,
-                                        "st": st,
-                                        "json": json
-                                    }
-                                    exec_locals = {}
-                                    exec(new_code, exec_globals, exec_locals)
 
-                                    output_obj = exec_locals.get("fig") or \
-                                                 exec_locals.get("output") or \
-                                                 exec_locals.get("fig_dict")
-
-                                    if isinstance(output_obj, dict) and "data" in output_obj and "layout" in output_obj:
-                                        output_obj = pio.from_json(json.dumps(output_obj))
-
-                                    artifact["data"] = output_obj
-                                    artifact["render_type"] = "plotly" if isinstance(output_obj, go.Figure) else "dataframe"
-                                    st.session_state[editor_key] = new_code
-                                    st.session_state[output_key] = output_obj
-
-                                except Exception as e:
-                                    st.error(f"Error executing code: {e}")
+                            #
+                            #
+                            # # Only run if the code has changed
+                            # if new_code and new_code != st.session_state.get(editor_key):
+                            #     try:
+                            #         exec_globals = {
+                            #             "df": st.session_state.df,
+                            #             "pd": pd,
+                            #             "np": np,
+                            #             "sns": sns,
+                            #             "go": go,
+                            #             "plt": plt,
+                            #             "pio": pio,
+                            #             "st": st,
+                            #             "json": json
+                            #         }
+                            #         exec_locals = {}
+                            #         exec(new_code, exec_globals, exec_locals)
+                            #
+                            #         output_obj = exec_locals.get("fig") or \
+                            #                      exec_locals.get("output") or \
+                            #                      exec_locals.get("fig_dict")
+                            #
+                            #         if isinstance(output_obj, dict) and "data" in output_obj and "layout" in output_obj:
+                            #             output_obj = pio.from_json(json.dumps(output_obj))
+                            #
+                            #         artifact["data"] = output_obj
+                            #         artifact["render_type"] = "plotly" if isinstance(output_obj, go.Figure) else "dataframe"
+                            #         st.session_state[editor_key] = new_code
+                            #         st.session_state[output_key] = output_obj
+                            #
+                            #     except Exception as e:
+                            #         st.error(f"Error executing code: {e}")
 
 
 PAGE_OPTIONS = [
