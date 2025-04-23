@@ -166,3 +166,8 @@ fraud_data.db
 *.toml
 
 standalone_projects/standalone_ai_ds_team/credentials.yml
+
+
+data/all_reviews.csv
+*.parquet
+
