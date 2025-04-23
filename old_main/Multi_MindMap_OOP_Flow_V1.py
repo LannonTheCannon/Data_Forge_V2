@@ -274,66 +274,75 @@ if __name__ == "__main__":
 
     if page == 'Data Upload':
         st.title('Upload your own Dataset!')
-        uploaded_file = st.file_uploader('Upload CSV or Excel here', type=['csv', 'excel'])
 
-        if uploaded_file is not None:
-            # Load data into session state
-            df = load_data(uploaded_file)
-            if df is not None:
-                st.session_state.df = df
-                st.session_state["DATA_RAW"] = df
-                st.session_state.df_preview = df.head()
-                # st.session_state.df_summary = df.describe()
+        upload_type = st.radio('Upload Method', ['Upload File', 'Paste S3 URL', 'Connect DB'])
 
-                # Save dataset name without extension
-                dataset_name = uploaded_file.name.rsplit('.', 1)[0]
-                st.session_state['dataset_name'] = dataset_name
-                # st.write(dataset_name)
+        if upload_type == 'Upload File':
+            uploaded_file = st.file_uploader('Choose a CSV', type=['csv', 'excel'])
+            if uploaded_file is not None:
+                # Load data into session state
+                df = load_data(uploaded_file)
+                if df is not None:
+                    st.session_state.df = df
+                    st.session_state["DATA_RAW"] = df
+                    st.session_state.df_preview = df.head()
+                    # st.session_state.df_summary = df.describe()
+
+                    # Save dataset name without extension
+                    dataset_name = uploaded_file.name.rsplit('.', 1)[0]
+                    st.session_state['dataset_name'] = dataset_name
+                    # st.write(dataset_name)
 
 
-                # numeric + categorical summary
-                numeric_summary = df.describe()
-                cat_summary = df.describe(include=['object', 'category', 'bool'])
-                # build a richer metadata string
-                st.session_state.df_summary = numeric_summary  # keep for display
-                cols = df.columns.tolist()
-                numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-                categorical_cols = df.select_dtypes(include=['object', 'category', 'bool']).columns.tolist()
-                cat_cardinalities = {c: int(df[c].nunique()) for c in categorical_cols}
-                top_cats = {c: df[c].value_counts().head(3).to_dict() for c in categorical_cols}
+                    # numeric + categorical summary
+                    numeric_summary = df.describe()
+                    cat_summary = df.describe(include=['object', 'category', 'bool'])
+                    # build a richer metadata string
+                    st.session_state.df_summary = numeric_summary  # keep for display
+                    cols = df.columns.tolist()
+                    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+                    categorical_cols = df.select_dtypes(include=['object', 'category', 'bool']).columns.tolist()
+                    cat_cardinalities = {c: int(df[c].nunique()) for c in categorical_cols}
+                    top_cats = {c: df[c].value_counts().head(3).to_dict() for c in categorical_cols}
 
-                # Rebuild a 'metadata_string' for the root node
-                if st.session_state.df_summary is not None:
-                    # Basic example of turning summary + columns into a string
-                    cols = list(st.session_state.df_summary.columns)
-                    row_count = st.session_state.df.shape[0]
-                    st.session_state.metadata_string = (
-                        f"Columns: {cols}\n"
-                        f"Numeric columns: {numeric_cols}\n"
-                        f"Categorical columns: {categorical_cols} (cardinalities: {cat_cardinalities})\n"
-                        f"Top categories: {top_cats}\n"
-                        f"Row count: {len(df)}"
-                    )
-                    # print(st.session_state.metadata_string)
-                    # Produce a one-sentence question describing the dataset
-                    root_question = generate_root_summary_question(st.session_state.metadata_string)
+                    # Rebuild a 'metadata_string' for the root node
+                    if st.session_state.df_summary is not None:
+                        # Basic example of turning summary + columns into a string
+                        cols = list(st.session_state.df_summary.columns)
+                        row_count = st.session_state.df.shape[0]
+                        st.session_state.metadata_string = (
+                            f"Columns: {cols}\n"
+                            f"Numeric columns: {numeric_cols}\n"
+                            f"Categorical columns: {categorical_cols} (cardinalities: {cat_cardinalities})\n"
+                            f"Top categories: {top_cats}\n"
+                            f"Row count: {len(df)}"
+                        )
+                        # print(st.session_state.metadata_string)
+                        # Produce a one-sentence question describing the dataset
+                        root_question = generate_root_summary_question(st.session_state.metadata_string)
 
-                    # Update the root node's data if it exists:
-                    if st.session_state.curr_state.nodes:
-                        root_node = st.session_state.curr_state.nodes[0]
-                        root_node.data["full_question"] = root_question
-                        # Optionally display it on the node itself:
-                        root_node.data["content"] = "ROOT"  # or root_node.data["content"] = root_question
-                        root_node.data["short_label"] = "ROOT"
+                        # Update the root node's data if it exists:
+                        if st.session_state.curr_state.nodes:
+                            root_node = st.session_state.curr_state.nodes[0]
+                            root_node.data["full_question"] = root_question
+                            # Optionally display it on the node itself:
+                            root_node.data["content"] = "ROOT"  # or root_node.data["content"] = root_question
+                            root_node.data["short_label"] = "ROOT"
 
-        # Display preview & summary if data exists
-        if st.session_state.df is not None:
-            st.write("### Data Preview")
-            st.write(st.session_state.df_preview)
+            # Display preview & summary if data exists
+            if st.session_state.df is not None:
+                st.write("### Data Preview")
+                st.write(st.session_state.df_preview)
 
-            st.write("### Data Summary")
-            st.write(st.session_state.df_summary)
+                st.write("### Data Summary")
+                st.write(st.session_state.df_summary)
 
+        elif upload_type == 'Paste S3 URL':
+            s3_url = st.text_input("S3 Parquet file URL")
+        elif upload_type == "Connect DB":
+            db_uri = st.text_input("Enter your DB connection string")
+
+        # uploaded_file = st.file_uploader('Upload CSV or Excel here', type=['csv', 'excel'])
 
     elif page == 'Mind Mapping':
         st.title("Mind Mapping + Agentic Ensemble")
