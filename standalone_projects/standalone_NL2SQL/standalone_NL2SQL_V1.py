@@ -1,195 +1,130 @@
 import openai
-
 import streamlit as st
 import sqlalchemy as sql
+from sqlalchemy.pool import NullPool
 import pandas as pd
 import asyncio
+import os
 
 from langchain_community.chat_message_histories import StreamlitChatMessageHistory
 from langchain_openai import ChatOpenAI
-
 from ai_data_science_team.agents import SQLDatabaseAgent
 
 # * APP Inputs
-
-import os
-
-# Dynamically find the correct base directory (where this script lives)
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))  # Just ONE level up!
-DB_PATH = os.path.join(BASE_DIR, "..", "..", "data", "northwind.db")
-DB_PATH = os.path.abspath(DB_PATH)  # Normalize the full path
-
-
-DB_OPTIONS = {
-    "Northwind Database": f"sqlite:///{DB_PATH}"
-}
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.abspath(os.path.join(BASE_DIR, "..", "..", "data", "northwind.db"))
+DB_OPTIONS = {"Northwind Database": f"sqlite:///{DB_PATH}"}
 
 MODEL_LIST = ['gpt-4o-mini', 'gpt-4o']
-
 TITLE = "Your SQL Database Agent"
 
-st.set_page_config(page_title=TITLE, page_icon="📊", )
+# Streamlit setup
+st.set_page_config(page_title=TITLE, page_icon="📊")
 st.title(TITLE)
-
-st.markdown("""
-Welcome to the SQL Database Agent. This AI agent is designed to help you query your SQL database and return data frames that you can interactively inspect and download.
-""")
+st.markdown(
+    """
+    Welcome to the SQL Database Agent. This AI agent is designed to help you query your SQL database
+    and return data frames that you can interactively inspect and download.
+    """
+)
 
 with st.expander("Example Questions", expanded=False):
     st.write(
         """
         - What tables exist in the database?
         - What are the first 10 rows in the territory table?
-        - Aggregate sales for each territory. 
+        - Aggregate sales for each territory.
         - Aggregate sales by month for each territory.
         """
     )
 
-# * STREAMLIT APP SIDEBAR ----
-
-# Database Selection
-
-db_option = st.sidebar.selectbox(
-    "Select a Database",
-    list(DB_OPTIONS.keys()),
-)
-
-st.session_state["PATH_DB"] = DB_OPTIONS.get(db_option)
-
+# Sidebar: Database selection and engine creation
+db_option = st.sidebar.selectbox("Select a Database", list(DB_OPTIONS.keys()))
+st.session_state["PATH_DB"] = DB_OPTIONS[db_option]
 st.write(f"Resolved DB path: `{DB_PATH}`")
 st.write("File exists?", os.path.exists(DB_PATH))
 
-sql_engine = sql.create_engine(DB_OPTIONS[db_option])
+sql_engine = sql.create_engine(
+    DB_OPTIONS[db_option],
+    connect_args={"check_same_thread": False},
+    poolclass=NullPool,
+)
 
-conn = sql_engine.connect()
+# OpenAI setup
 client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-# * OpenAI API Key
-
-# st.sidebar.header("Enter your OpenAI API Key")
-#
-# st.session_state["OPENAI_API_KEY"] = st.sidebar.text_input("API Key", type="password", help="Your OpenAI API key is required for the app to function.")
-#
-# # Test OpenAI API Key
-# if st.session_state["OPENAI_API_KEY"]:
-#     # Set the API key for OpenAI
-#     client = OpenAI(api_key=st.session_state["OPENAI_API_KEY"])
-#
-#     # Test the API key (optional)
-#     try:
-#         # Example: Fetch models to validate the key
-#         models = client.models.list()
-#         st.success("API Key is valid!")
-#     except Exception as e:
-#         st.error(f"Invalid API Key: {e}")
-# else:
-#     st.info("Please enter your OpenAI API Key to proceed.")
-#     st.stop()
-
-
-# * OpenAI Model Selection
-
-model_option = st.sidebar.selectbox(
-    "Choose OpenAI model",
-    MODEL_LIST,
-    index=0
-)
-
-OPENAI_LLM = ChatOpenAI(
-    model = model_option,
-    api_key=st.secrets["OPENAI_API_KEY"]
-)
-
+model_option = st.sidebar.selectbox("Choose OpenAI model", MODEL_LIST, index=0)
+OPENAI_LLM = ChatOpenAI(model=model_option, api_key=st.secrets["OPENAI_API_KEY"])
 llm = OPENAI_LLM
 
-# * STREAMLIT
-
-# Set up memory
+# Chat memory and dataframe store
 msgs = StreamlitChatMessageHistory(key="langchain_messages")
-if len(msgs.messages) == 0:
+if not msgs.messages:
     msgs.add_ai_message("How can I help you?")
 
-# Initialize dataframe storage in session state
 if "dataframes" not in st.session_state:
     st.session_state.dataframes = []
 
-# Function to display chat messages including Plotly charts and dataframes
+# Function to render chat + stored dataframes
 def display_chat_history():
     for i, msg in enumerate(msgs.messages):
         with st.chat_message(msg.type):
             if "DATAFRAME_INDEX:" in msg.content:
-                df_index = int(msg.content.split("DATAFRAME_INDEX:")[1])
-                st.dataframe(st.session_state.dataframes[df_index])
+                idx = int(msg.content.split("DATAFRAME_INDEX:")[1])
+                st.dataframe(st.session_state.dataframes[idx])
             else:
                 st.write(msg.content)
 
-# Render current messages from StreamlitChatMessageHistory
 display_chat_history()
 
-# Create the SQL Database Agent
-sql_db_agent = SQLDatabaseAgent(
-    model = llm,
-    connection=conn,
-    n_samples=1,
-    log = False,
-    bypass_recommended_steps=True,
-)
+# Async handler using fresh connection per query
+def run_agent(question: str):
+    async def _inner():
+        with sql_engine.connect() as conn:
+            agent = SQLDatabaseAgent(
+                model=llm,
+                connection=conn,
+                n_samples=1,
+                log=False,
+                bypass_recommended_steps=True,
+            )
+            await agent.ainvoke_agent(user_instructions=question)
+            return agent
+    return asyncio.run(_inner())
 
-# Handle the question async
-async def handle_question(question):
-    await sql_db_agent.ainvoke_agent(
-        user_instructions=question,
-    )
-    return sql_db_agent
-
-
+# Main user input loop
 if st.session_state["PATH_DB"] and (question := st.chat_input("Enter your question here:", key="query_input")):
-
     if not st.secrets["OPENAI_API_KEY"]:
-        st.error("Please enter your OpenAI API Key to proceed.")
+        st.error("Please set your OpenAI API key in secrets.")
         st.stop()
 
+    st.chat_message("human").write(question)
+    msgs.add_user_message(question)
+
     with st.spinner("Thinking..."):
-
-        st.chat_message("human").write(question)
-        msgs.add_user_message(question)
-
-        # Run the app
-        error_occured = False
         try:
-            print(st.session_state["PATH_DB"])
-            result = asyncio.run(handle_question(question))
-        except Exception as e:
-            error_occured = True
-            print(e)
-
-            response_text = f"""
-            I'm sorry. I am having difficulty answering that question. You can try providing more details and I'll do my best to provide an answer.
-            
-            Error: {e}
-            """
-            msgs.add_ai_message(response_text)
-            st.chat_message("ai").write(response_text)
-            st.error(f"Error: {e}")
-
-        # Generate the Results
-        if not error_occured:
-
+            result = run_agent(question)
+            # Safely extract SQL and DataFrame
             sql_query = result.get_sql_query_code()
-            response_df = result.get_data_sql()
+            if sql_query is None:
+                sql_query = ""
+            tmp_df = result.get_data_sql()
+            response_df = tmp_df if tmp_df is not None else pd.DataFrame()
+        except Exception as e:
+            error_msg = f"I'm sorry, I couldn't process that. Error: {e}"
+            msgs.add_ai_message(error_msg)
+            st.chat_message("ai").write(error_msg)
+            st.error(error_msg)
+            raise
 
-            if sql_query:
+    # Record and display result
+    header = f"### SQL Results:\n\nSQL Query:\n```sql\n{sql_query}\n```\n\nResult:"
+    df_index = len(st.session_state.dataframes)
+    st.session_state.dataframes.append(response_df)
+    msgs.add_ai_message(header)
+    msgs.add_ai_message(f"DATAFRAME_INDEX:{df_index}")
+    st.chat_message("ai").write(header)
 
-                # Store the SQL
-                response_1 = f"### SQL Results:\n\nSQL Query:\n\n```sql\n{sql_query}\n```\n\nResult:"
-
-                # Store the forecast df and keep its index
-                df_index = len(st.session_state.dataframes)
-                st.session_state.dataframes.append(response_df)
-
-                # Store response
-                msgs.add_ai_message(response_1)
-                msgs.add_ai_message(f"DATAFRAME_INDEX:{df_index}")
-
-                # Write Results
-                st.chat_message("ai").write(response_1)
-                st.dataframe(response_df)
+    if not response_df.empty:
+        st.dataframe(response_df)
+    else:
+        st.warning("No data returned. Check the query or the database content.")
