@@ -167,7 +167,8 @@ fraud_data.db
 
 standalone_projects/standalone_ai_ds_team/credentials.yml
 
-
+# Freakishly Large Data
 data/all_reviews.csv
 *.parquet
+data/northwind.db
 
