@@ -12,8 +12,18 @@ from ai_data_science_team.agents import SQLDatabaseAgent
 
 # * APP Inputs
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.abspath(os.path.join(BASE_DIR, "..", "..", "data", "northwind.db"))
-DB_OPTIONS = {"Northwind Database": f"sqlite:///{DB_PATH}"}
+NW_PATH = os.path.abspath(os.path.join(BASE_DIR, "..", "..", "data", "northwind.db"))
+CH_PATH = os.path.join(BASE_DIR, "..", "..", "data", "Chinook_Sqlite.sqlite")
+
+# DB_OPTIONS = {"Northwind Database": f"sqlite:///{NW_PATH}",
+#               "Chinook (SQLite)": f"sqlite:///{CH_PATH}"
+#               }
+
+DB_FILES = {
+    "Northwind Database": NW_PATH,
+    "Chinook (SQLite)": CH_PATH,
+}
+DB_OPTIONS = {k: f"sqlite:///{v}" for k, v in DB_FILES.items()}
 
 MODEL_LIST = ['gpt-4o-mini', 'gpt-4o']
 TITLE = "Your SQL Database Agent"
@@ -40,9 +50,13 @@ with st.expander("Example Questions", expanded=False):
 
 # Sidebar: Database selection and engine creation
 db_option = st.sidebar.selectbox("Select a Database", list(DB_OPTIONS.keys()))
-st.session_state["PATH_DB"] = DB_OPTIONS[db_option]
-st.write(f"Resolved DB path: `{DB_PATH}`")
-st.write("File exists?", os.path.exists(DB_PATH))
+raw_path = DB_FILES[db_option]
+
+
+
+# st.session_state["PATH_DB"] = DB_OPTIONS[db_option]
+# st.write(f"Resolved DB path: `{DB_PATH}`")
+# st.write("File exists?", os.path.exists(DB_PATH))
 
 sql_engine = sql.create_engine(
     DB_OPTIONS[db_option],
