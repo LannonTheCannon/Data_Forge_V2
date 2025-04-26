@@ -4,23 +4,36 @@ from streamlit_flow import streamlit_flow
 from streamlit_flow.elements import StreamlitFlowNode, StreamlitFlowEdge
 from streamlit_flow.state import StreamlitFlowState
 from streamlit_flow.layouts import TreeLayout
-import random
-import numpy as np
-# from standalone_projects.standalone_streamlit_flow_nodes.mindmap_config import sample_categories, CATEGORY_CFG
 import openai
+import numpy as np
+
+# Node template (your custom classes)
 from node_template import BaseNode, ThemeNode, QuestionNode, TerminalNode
 
-st.set_page_config(page_title="Advanced PandasAI + Vision Demo", layout="wide")
+# Agents
+from ai_data_science_team.agents import DataCleaningAgent, FeatureEngineeringAgent
+
+# LLM
+from langchain_openai import ChatOpenAI
+llm = ChatOpenAI(model='gpt-4o-mini')
+
+# OpenAI Client
 client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
+# Config
+st.set_page_config(page_title="DataForge: Clean, Engineer, Map", layout="wide")
+
+# Colors for mindmap
 COLOR_PALETTE = ["#FF6B6B", "#6BCB77", "#4D96FF", "#FFD93D", "#845EC2", "#F9A826"]
 
-# ##################### SESSION STATE STUFF ####################### #
+# Initialize Agents
+data_cleaning_agent = DataCleaningAgent(model=llm, n_samples=50, log=False)
+feature_engineering_agent = FeatureEngineeringAgent(model=llm, n_samples=50, log=False)
+
+# -------------- Session State Initialization -------------- #
 
 if "curr_state" not in st.session_state:
-    # Prepare root node. We'll store the dataset metadata in "full_question" if we have it.
     dataset_label = st.session_state.get("dataset_name", "Dataset")
-
     root_theme = ThemeNode(
         node_id="S0",
         label="ROOT",
@@ -30,15 +43,11 @@ if "curr_state" not in st.session_state:
         parent_id=None,
         metadata={"content": dataset_label}
     )
-
     st.session_state.mindmap_nodes = {"S0": root_theme}
-    st.session_state.curr_state = StreamlitFlowState(
-        nodes=[root_theme.to_streamlit_node()],
-        edges=[]
-    )
+    st.session_state.curr_state = StreamlitFlowState(nodes=[root_theme.to_streamlit_node()], edges=[])
 
-for key in ["chart_path", "df", "df_preview", "df_summary", "metadata_string", "saved_charts", "DATA_RAW", "plots",
-            "dataframes", "msg_index", "clicked_questions", "dataset_name"]:
+for key in ["chart_path", "df", "df_preview", "df_summary", "metadata_string", "saved_charts",
+            "DATA_RAW", "plots", "dataframes", "msg_index", "clicked_questions", "dataset_name"]:
     if key not in st.session_state:
         st.session_state[key] = None if key in ["chart_path", "df", "df_preview", "df_summary", "metadata_string", "DATA_RAW"] else []
 
@@ -48,141 +57,129 @@ if "expanded_nodes" not in st.session_state:
 if "seen_embeddings" not in st.session_state:
     st.session_state.seen_embeddings = []
 
-# ######################## UPLOAD DATA ######################## #
-
-def load_data(uploaded_file):
-    if uploaded_file is not None:
-        df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
-        return df
-    return None
+# -------------- Utility Functions -------------- #
 
 def generate_root_summary_question(metadata_string: str) -> str:
-    """
-    Uses OpenAI to produce a single-sentence question or statement that describes
-    or summarizes the dataset metadata.
-    :param metadata_str:
-    :return: beautified metadata str
-    """
     if not metadata_string:
         return "Overview of the dataset"
-
-    messages = [
-        {
-            "role": "system",
-            "content": """You are a data summarizer. 
-               Given dataset metadata, produce a single-sentence question 
-               or statement that captures the main theme or focus of the dataset. 
-               Keep it short (one sentence) and neutral."""
-        },
-        {
-            "role": "user",
-            "content": f"Dataset metadata:\n{metadata_string}\n\nPlease provide one short question about the dataset."
-        }
-    ]
-
     try:
         response = openai.chat.completions.create(
             model="gpt-4.1-mini",
-            messages=messages,
-            max_tokens=50  # Enough for a short response
+            messages=[
+                {"role": "system", "content": "You are a data summarizer."},
+                {"role": "user", "content": f"Dataset metadata:\n{metadata_string}\n\nSummarize in one sentence."}
+            ],
+            max_tokens=50
         )
-        text = response.choices[0].message.content.strip()
-        # Just in case the model returns multiple lines, combine them or take first line
-        lines = text.split("\n")
-        return lines[0].strip()
-    except Exception as e:
-        # Fallback if there's an error
-        return "What is the primary focus of this dataset?"
+        return response.choices[0].message.content.strip().split("\n")[0]
+    except Exception:
+        return "Overview of the dataset"
 
-# ######################## MIND MAPPING ######################## #
+# -------------- Page Layouts -------------- #
 
-
-
-PAGE_OPTIONS = [
-    'Data Upload',
-    'Mind Mapping',
-]
-
+PAGE_OPTIONS = ['Data Upload', 'Mind Mapping']
 page = st.sidebar.radio('Select a Page', PAGE_OPTIONS)
+
+# -------------- Main -------------- #
 
 if __name__ == "__main__":
 
     if page == 'Data Upload':
-        st.title('Upload your own Dataset!')
-        uploaded_file = st.file_uploader('Upload CSV or Excel here', type=['csv', 'excel'])
+        st.title('🧹 DataForge Upload + Transformation')
 
-        if uploaded_file is not None:
-            # Load data into session state
-            df = load_data(uploaded_file)
-            if df is not None:
-                st.session_state.df = df
-                st.session_state["DATA_RAW"] = df
-                st.session_state.df_preview = df.head()
-                # st.session_state.df_summary = df.describe()
+        uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"])
 
-                # Save dataset name without extension
+        if uploaded_file:
+            try:
+                # Step 1: Load dataset
+                df = pd.read_csv(uploaded_file)
+                st.success("✅ File uploaded successfully!")
+
                 dataset_name = uploaded_file.name.rsplit('.', 1)[0]
                 st.session_state['dataset_name'] = dataset_name
-                # st.write(dataset_name)
 
+                # Step 2: Run Data Cleaning Agent
+                with st.spinner('Cleaning Data...'):
+                    data_cleaning_agent.invoke_agent(data_raw=df, user_instructions="Use default cleaning steps.")
+                    df_cleaned = data_cleaning_agent.get_data_cleaned()
 
-                # numeric + categorical summary
-                numeric_summary = df.describe()
-                cat_summary = df.describe(include=['object', 'category', 'bool'])
-                # build a richer metadata string
-                st.session_state.df_summary = numeric_summary  # keep for display
-                cols = df.columns.tolist()
-                numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-                categorical_cols = df.select_dtypes(include=['object', 'category', 'bool']).columns.tolist()
-                cat_cardinalities = {c: int(df[c].nunique()) for c in categorical_cols}
-                top_cats = {c: df[c].value_counts().head(3).to_dict() for c in categorical_cols}
+                # Step 3: Run Feature Engineering Agent
+                with st.spinner('Engineering Features...'):
+                    feature_engineering_agent.invoke_agent(data_raw=df_cleaned, user_instructions="Use default feature engineering steps.")
+                    df_final = feature_engineering_agent.get_data_engineered()
 
-                # Rebuild a 'metadata_string' for the root node
-                if st.session_state.df_summary is not None:
-                    # Basic example of turning summary + columns into a string
-                    cols = list(st.session_state.df_summary.columns)
-                    row_count = st.session_state.df.shape[0]
-                    st.session_state.metadata_string = (
-                        f"Columns: {cols}\n"
-                        f"Numeric columns: {numeric_cols}\n"
-                        f"Categorical columns: {categorical_cols} (cardinalities: {cat_cardinalities})\n"
-                        f"Top categories: {top_cats}\n"
-                        f"Row count: {len(df)}"
-                    )
-                    # print(st.session_state.metadata_string)
-                    # Produce a one-sentence question describing the dataset
-                    root_question = generate_root_summary_question(st.session_state.metadata_string)
+                # Step 4: Update Session State
+                st.session_state.df = df_final
+                st.session_state.DATA_RAW = df_final
+                st.session_state.df_preview = df_final.head()
 
-                    # Update the root node's data if it exists:
-                    if st.session_state.curr_state.nodes:
-                        root_node = st.session_state.curr_state.nodes[0]
-                        root_node.data["full_question"] = root_question
-                        # Optionally display it on the node itself:
-                        root_node.data["content"] = "ROOT"  # or root_node.data["content"] = root_question
-                        root_node.data["short_label"] = "ROOT"
+                numeric_summary = df_final.describe()
+                categorical_summary = df_final.describe(include=['object', 'category', 'bool'])
 
-        # Display preview & summary if data exists
-        if st.session_state.df is not None:
-            st.write("### Data Preview")
-            st.write(st.session_state.df_preview)
+                numeric_cols = df_final.select_dtypes(include=[np.number]).columns.tolist()
+                categorical_cols = df_final.select_dtypes(include=['object', 'category', 'bool']).columns.tolist()
+                cat_cardinalities = {col: int(df_final[col].nunique()) for col in categorical_cols}
+                top_cats = {col: df_final[col].value_counts().head(3).to_dict() for col in categorical_cols}
 
-            st.write("### Data Summary")
-            st.write(st.session_state.df_summary)
+                st.session_state.df_summary = numeric_summary
+                st.session_state.metadata_string = (
+                    f"Columns: {list(df_final.columns)}\n"
+                    f"Numeric columns: {numeric_cols}\n"
+                    f"Categorical columns: {categorical_cols} (cardinalities: {cat_cardinalities})\n"
+                    f"Top categories: {top_cats}\n"
+                    f"Row count: {len(df_final)}"
+                )
 
+                # Step 5: Update Root Node
+                root_question = generate_root_summary_question(st.session_state.metadata_string)
+                if st.session_state.curr_state.nodes:
+                    root_node = st.session_state.curr_state.nodes[0]
+                    root_node.data["full_question"] = root_question
+                    root_node.data["content"] = dataset_name
+                    root_node.data["short_label"] = "ROOT"
+
+                # Step 6: Show in Tabs
+                tabs = st.tabs(["Raw Data", "Cleaned Data", "Feature Engineered Data", "Cleaning Agent Code", "Feature Engineering Code"])
+
+                with tabs[0]:
+                    st.subheader("STEP 1) Raw Uploaded Data Preview")
+                    st.dataframe(df.head())
+
+                with tabs[1]:
+                    st.subheader("STEP 2) Cleaned Data Preview")
+                    st.dataframe(df_cleaned.head())
+
+                with tabs[2]:
+                    st.subheader("STEP 3) Final Feature Engineered Data")
+                    st.dataframe(df_final.head())
+                    csv = df_final.to_csv(index=False).encode('utf-8')
+                    st.download_button("📥 Download Cleaned Dataset", data=csv, file_name="dataforge_cleaned_dataset.csv", mime="text/csv")
+
+                with tabs[3]:
+                    st.subheader("STEP 4) Data Cleaning Agent - Generated Code")
+                    cleaning_code = data_cleaning_agent.get_data_cleaner_function()
+                    st.code(cleaning_code, language='python')
+
+                with tabs[4]:
+                    st.subheader("STEP 5) Feature Engineering Agent - Generated Code")
+                    feature_code = feature_engineering_agent.get_feature_engineer_function()
+                    st.code(feature_code, language='python')
+
+            except Exception as e:
+                st.error(f"Something went wrong: {e}")
 
     elif page == 'Mind Mapping':
-        st.title("Mind Mapping + Agentic Ensemble")
+        st.title('🧠 Mind Mapping + Agentic Exploration')
 
-        # Sync root node label with updated dataset name if needed
         if st.session_state.get("dataset_name"):
             root_node = st.session_state.curr_state.nodes[0]
             if root_node.data["content"] != st.session_state["dataset_name"]:
                 root_node.data["content"] = st.session_state["dataset_name"]
 
         col1, col2 = st.columns([3, 1])
+
         with col2:
             if st.button("🔄 Reset Mind Map"):
-                # Rebuild the root node
                 dataset_label = st.session_state.get("dataset_name", "Dataset")
                 new_root = StreamlitFlowNode(
                     "S0",
@@ -202,7 +199,7 @@ if __name__ == "__main__":
                 st.session_state.clicked_questions = []
                 st.rerun()
 
-        # Render the flow
+        # Render mind map
         st.session_state.curr_state = streamlit_flow(
             "mind_map",
             st.session_state.curr_state,
@@ -215,39 +212,15 @@ if __name__ == "__main__":
             show_minimap=False
         )
 
-        # ------------------ Mind Map Node Click Event Handler ------------------
-
+        # Node click event
         clicked_node_id = st.session_state.curr_state.selected_id
 
         if clicked_node_id and clicked_node_id not in st.session_state.expanded_nodes:
-            st.write("👉 Node clicked:", clicked_node_id)
-
-            # Get the corresponding object from our mindmap node registry
             clicked_obj = st.session_state.mindmap_nodes.get(clicked_node_id)
 
-            # Log for debugging
-            st.write("📌 All registered node IDs:", list(st.session_state.mindmap_nodes.keys()))
-            st.write("📌 Already expanded nodes:", st.session_state.expanded_nodes)
-
-            if not clicked_obj:
-                st.warning(f"⚠️ Node '{clicked_node_id}' not found in mindmap_nodes.")
-            else:
-                # ✅ Only log if not already recorded
-                already_logged = any(q["section"] == clicked_obj.node_id for q in st.session_state.clicked_questions)
-
-                if not already_logged:
-                    st.session_state.clicked_questions.append({
-                        "section": clicked_obj.node_id,
-                        "short_label": clicked_obj.label,
-                        "full_question": clicked_obj.full_question,
-                        "node_type": clicked_obj.node_type
-                    })
-
+            if clicked_obj:
                 if clicked_obj.can_expand() and clicked_node_id not in st.session_state.expanded_nodes:
-                    children = clicked_obj.get_children(
-                        openai_client=client,
-                        metadata_string=st.session_state.metadata_string
-                    ) or []
+                    children = clicked_obj.get_children(openai_client=client, metadata_string=st.session_state.metadata_string) or []
 
                     for child in children:
                         st.session_state.mindmap_nodes[child.node_id] = child
@@ -260,13 +233,10 @@ if __name__ == "__main__":
                                 animated=True
                             )
                         )
-
                     clicked_obj.mark_expanded()
                     st.session_state.expanded_nodes.add(clicked_node_id)
 
                 st.rerun()
-
-        # ------------------ Display User Click History ------------------
 
         if st.session_state.clicked_questions:
             st.write("## Clicked Nodes (User's Exploration Path)")
