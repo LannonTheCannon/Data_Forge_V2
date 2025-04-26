@@ -275,7 +275,8 @@ if __name__ == "__main__":
     if page == 'Data Upload':
         st.title('Upload your own Dataset!')
 
-        upload_type = st.radio('Upload Method', ['Upload File', 'Paste S3 URL', 'Connect DB'])
+        # upload_type = st.radio('Upload Method', ['Upload File', 'Paste S3 URL', 'Connect DB'])
+        upload_type = st.radio('Upload Method', ['Upload File'])
 
         if upload_type == 'Upload File':
             uploaded_file = st.file_uploader('Choose a CSV', type=['csv', 'excel'])
@@ -337,10 +338,10 @@ if __name__ == "__main__":
                 st.write("### Data Summary")
                 st.write(st.session_state.df_summary)
 
-        elif upload_type == 'Paste S3 URL':
-            s3_url = st.text_input("S3 Parquet file URL")
-        elif upload_type == "Connect DB":
-            db_uri = st.text_input("Enter your DB connection string")
+        # elif upload_type == 'Paste S3 URL':
+        #     s3_url = st.text_input("S3 Parquet file URL")
+        # elif upload_type == "Connect DB":
+        #     db_uri = st.text_input("Enter your DB connection string")
 
         # uploaded_file = st.file_uploader('Upload CSV or Excel here', type=['csv', 'excel'])
 

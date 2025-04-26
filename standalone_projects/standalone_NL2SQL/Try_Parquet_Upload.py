@@ -1,4 +1,4 @@
-from load_big_file import load_big_file_to_parquet, query_parquet
+from standalone_projects.standalone_NL2SQL.load_big_file import load_big_file_to_parquet, query_parquet
 import streamlit as st
 
 csv_path = "./data/all_reviews.csv"
