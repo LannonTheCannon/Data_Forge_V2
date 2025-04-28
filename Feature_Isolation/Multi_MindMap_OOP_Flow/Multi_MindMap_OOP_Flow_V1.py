@@ -323,23 +323,39 @@ if __name__ == "__main__":
                 st.session_state.feature_engineering_code = feature_engineering_agent.get_feature_engineer_function()
 
                 numeric_summary = df_final.describe()
-                categorical_summary = df_final.describe(include=['object', 'category', 'bool'])
+                # categorical_summary = df_final.describe(include=['object', 'category', 'bool'])
 
+                #############
                 numeric_cols = df_final.select_dtypes(include=[np.number]).columns.tolist()
                 categorical_cols = df_final.select_dtypes(include=['object', 'category', 'bool']).columns.tolist()
-                cat_cardinalities = {col: int(df_final[col].nunique()) for col in categorical_cols}
-                top_cats = {col: df_final[col].value_counts().head(3).to_dict() for col in categorical_cols}
 
+                # Protect against weird columns
+                safe_categorical_cols = []
+                cat_cardinalities = {}
+                top_cats = {}
+
+                for col in categorical_cols:
+                    try:
+                        nunique = int(df_final[col].nunique())
+                        top_values = df_final[col].value_counts().head(3).to_dict()
+
+                        cat_cardinalities[col] = nunique
+                        top_cats[col] = top_values
+                        safe_categorical_cols.append(col)
+
+                    except Exception as e:
+                        st.warning(f"Skipping column `{col}` due to error: {e}")
+
+                # Now use only the safe columns
                 st.session_state.df_summary = numeric_summary
                 st.session_state.metadata_string = (
                     f"Columns: {list(df_final.columns)}\n"
                     f"Numeric columns: {numeric_cols}\n"
-                    f"Categorical columns: {categorical_cols} (cardinalities: {cat_cardinalities})\n"
+                    f"Categorical columns: {safe_categorical_cols} (cardinalities: {cat_cardinalities})\n"
                     f"Top categories: {top_cats}\n"
                     f"Row count: {len(df_final)}"
                 )
-
-                st.write(st.session_state.metadata_string)
+                # st.write(st.session_state.metadata_string)
 
                 root_question = generate_root_summary_question(st.session_state.metadata_string)
                 if st.session_state.curr_state.nodes:
