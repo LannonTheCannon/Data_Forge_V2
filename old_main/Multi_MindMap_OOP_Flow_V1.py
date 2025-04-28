@@ -287,12 +287,12 @@ if __name__ == "__main__":
                     st.session_state.df = df
                     st.session_state["DATA_RAW"] = df
                     st.session_state.df_preview = df.head()
-                    # st.session_state.df_summary = df.describe()
+                    st.session_state.df_summary = df.describe()
 
                     # Save dataset name without extension
                     dataset_name = uploaded_file.name.rsplit('.', 1)[0]
                     st.session_state['dataset_name'] = dataset_name
-                    # st.write(dataset_name)
+                    st.write(dataset_name)
 
 
                     # numeric + categorical summary
