@@ -9,7 +9,9 @@ def handle_layout_change(new_layout):
 if "layout" not in st.session_state:
     # We define one item with isDraggable=True & isResizable=True so the user can move it.
     st.session_state["layout"] = [
-        dashboard.Item("box", x=0, y=0, w=3, h=3, isDraggable=True, isResizable=True)
+        dashboard.Item("box1", x=0, y=0, w=3, h=3, isDraggable=True, isResizable=True),
+        dashboard.Item("box2", x=1, y=1, w=3, h=3, isDraggable=True, isResizable=True),
+        dashboard.Item("box3", x=1, y=0, w=3, h=3, isDraggable=True, isResizable=True)
     ]
 
 st.title("Minimal streamlit-elements Demo")
@@ -25,7 +27,34 @@ with elements("demo"):
     ):
         # A simple gray box
         with html.Div(
-            key="box",
+            key="box1",
+            style={
+                "backgroundColor": "#DDD",
+                "height": "100%",
+                "width": "100%",
+                "display": "flex",
+                "justifyContent": "center",
+                "alignItems": "center",
+            },
+        ):
+            html.H4("Drag me around!")
+
+        with html.Div(
+            key="box2",
+            style={
+                "backgroundColor": "#DDD",
+                "height": "100%",
+                "width": "100%",
+                "display": "flex",
+                "justifyContent": "center",
+                "alignItems": "center",
+            },
+        ):
+            html.H4("Drag me around!")
+
+            # A simple gray box
+        with html.Div(
+            key="box3",
             style={
                 "backgroundColor": "#DDD",
                 "height": "100%",

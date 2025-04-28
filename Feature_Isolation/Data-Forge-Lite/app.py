@@ -27,11 +27,9 @@ from ai_data_science_team.agents import DataCleaningAgent, FeatureEngineeringAge
 
 # LLM
 from langchain_openai import ChatOpenAI
+    # Create the ChatOpenAI instance NOW
 
-# Streamlit Draggable Dash
 from streamlit_elements import elements, dashboard, html
-
-llm = ChatOpenAI(model='gpt-4o-mini')
 
 st.sidebar.header('Enter your OpenAI API Key')
 
@@ -47,11 +45,16 @@ st.session_state['OPENAI_API_KEY'] = st.sidebar.text_input(
 # Test OpenAI API Key
 if st.session_state['OPENAI_API_KEY']:
     # Set the API key for OPENAI
-    client = openai.OpenAI(api_key=st.session_state['OPENAI_API_KEY'])
 
     # Test the API key (optional)
     try:
-        pass
+        llm = ChatOpenAI(
+        model='gpt-4o-mini',
+        openai_api_key=st.session_state['OPENAI_API_KEY']
+        )
+        client = openai.OpenAI(
+        api_key=st.session_state['OPENAI_API_KEY']
+)
         # Example: Fetch models to validate the key
         # models = client.models.list()
         # st.success("API Key is valid!")
@@ -108,7 +111,7 @@ def generate_root_summary_question(metadata_string: str) -> str:
     if not metadata_string:
         return "Overview of the dataset"
     try:
-        response = openai.chat.completions.create(
+        response = client.chat.completions.create(
             model="gpt-4.1-mini",
             messages=[
                 {"role": "system", "content": "You are a data summarizer."},
@@ -154,7 +157,7 @@ Rules:
 """
 
     try:
-        response = openai.chat.completions.create(
+        response = client.chat.completions.create(
             model="gpt-4.1-mini",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant that rewrites data visualization queries into precise and code-friendly instructions."},
@@ -409,6 +412,7 @@ if __name__ == "__main__":
                 st.subheader("STEP 5) Feature Engineering Agent - Generated Code")
                 st.code(st.session_state.feature_engineering_code, language='python')
 
+
     elif page == 'Mind Mapping':
         st.title('🧠 Mind Mapping + Agentic Exploration')
 
@@ -506,7 +510,8 @@ if __name__ == "__main__":
             pass
             # msgs.add_ai_message("IMPORTANT: For best results use this formula -> Create a [chart] of the [field] on the y-axis (aggregation) and the [field] on the x-axis and make the chart [color].")
         if 'pandas_data_analyst' not in st.session_state:
-            model = ChatOpenAI(model='gpt-4.1-mini', api_key=st.secrets['OPENAI_API_KEY'])
+            model = ChatOpenAI(model='gpt-4.1-mini',
+                               api_key=st.session_state['OPENAI_API_KEY'])
             st.session_state.pandas_data_analyst = PandasDataAnalyst(
                 model=model,
                 data_wrangling_agent=DataWranglingAgent(model=model,
@@ -580,10 +585,10 @@ if __name__ == "__main__":
                     msgs.add_ai_message(error_msg)
         display_chat_history()
 
-    elif page =="Data Storyteller":
-        st.title('Build your Data Story')
-
+    elif page=="Data Storyteller":
             # Initialize saved story artifacts if not already
+
+
         if "saved_story_charts" not in st.session_state:
             st.session_state.saved_story_charts = []
 
