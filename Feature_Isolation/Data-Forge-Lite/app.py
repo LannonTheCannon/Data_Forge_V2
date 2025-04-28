@@ -65,12 +65,6 @@ else:
     st.info("Please enter your OpenAI API Key to proceed!")
     st.stop()
 
-# OpenAI Client
-# client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-
-# Config
-# st.set_page_config(page_title="DataForge: Clean, Engineer, Map", layout="wide")
-
 # Colors for mindmap
 COLOR_PALETTE = ["#FF6B6B", "#6BCB77", "#4D96FF", "#FFD93D", "#845EC2", "#F9A826"]
 
@@ -122,8 +116,6 @@ def generate_root_summary_question(metadata_string: str) -> str:
         return response.choices[0].message.content.strip().split("\n")[0]
     except Exception:
         return "Overview of the dataset"
-
-
 def get_assistant_interpretation(user_input, metadata, valid_columns):
     column_names = ', '.join(valid_columns)
 
@@ -244,7 +236,6 @@ def display_chat_history():
 
                             new_code = editor_response.get("text", "").strip()
 
-
                             #
                             #
                             # # Only run if the code has changed
@@ -278,6 +269,31 @@ def display_chat_history():
                             #
                             #     except Exception as e:
                             #         st.error(f"Error executing code: {e}")
+
+                            # ➕ New: Add to Story Button
+                            if st.button("➕ Add to Storytelling Dashboard", key=f"add_to_story_{i}_{j}"):
+                                if "saved_story_charts" not in st.session_state:
+                                    st.session_state.saved_story_charts = []
+                                if "story_layout" not in st.session_state:
+                                    st.session_state.story_layout = []
+
+                                # Save artifact
+                                st.session_state.saved_story_charts.append(artifact)
+
+                                # Create corresponding layout item
+                                st.session_state.story_layout.append(
+                                    dashboard.Item(
+                                        f"chart_{len(st.session_state.saved_story_charts)-1}",
+                                        x=(len(st.session_state.saved_story_charts) % 3) * 4,
+                                        y=(len(st.session_state.saved_story_charts) // 3) * 4,
+                                        w=4,
+                                        h=5,
+                                        isDraggable=True,
+                                        isResizable=True,
+                                    )
+                                )
+
+                                st.success("✅ Added to Storytelling Dashboard!")
 
 
 # -------------- Page Layouts -------------- #
@@ -411,7 +427,6 @@ if __name__ == "__main__":
             with tabs[4]:
                 st.subheader("STEP 5) Feature Engineering Agent - Generated Code")
                 st.code(st.session_state.feature_engineering_code, language='python')
-
 
     elif page == 'Mind Mapping':
         st.title('🧠 Mind Mapping + Agentic Exploration')
@@ -586,86 +601,81 @@ if __name__ == "__main__":
         display_chat_history()
 
     elif page=="Data Storyteller":
-            # Initialize saved story artifacts if not already
 
+        # Callback when layout changes (drag, resize)
+        def handle_layout_change(new_layout):
+            st.session_state.story_layout = new_layout
 
+                # Only initialize layout if not already
         if "saved_story_charts" not in st.session_state:
             st.session_state.saved_story_charts = []
 
         if "story_layout" not in st.session_state:
             st.session_state.story_layout = []
 
-        st.write("### 📊 Add charts to your Story")
+        # --- This part SHOULD always render, no matter what ---
+        st.title("📚 Data Storytelling Dashboard")
 
-        # Show available charts from analyst mode
-        if "chat_artifacts" in st.session_state:
-            for i, artifacts in st.session_state.chat_artifacts.items():
-                for j, artifact in enumerate(artifacts):
-                    title = artifact.get("title", f"Chart {i}-{j}")
-                    if st.button(f"➕ Add '{title}' to Story", key=f"add_story_{i}_{j}"):
-                        st.session_state.saved_story_charts.append(artifact)
-                        st.session_state.story_layout.append(
-                            dashboard.Item(
-                                f"chart_{len(st.session_state.saved_story_charts)-1}",
-                                x=(len(st.session_state.saved_story_charts) % 3) * 4,
-                                y=(len(st.session_state.saved_story_charts) // 3) * 4,
-                                w=4,
-                                h=5,
-                                isDraggable=True,
-                                isResizable=True,
-                            )
-                        )
-                        st.rerun()
-
-        st.write("---")
-        st.write("### 🧩 Arrange your Data Story:")
-
-        # Callback when user drags/resizes
-        def handle_layout_change(new_layout):
-            st.session_state.story_layout = new_layout
-
+        # Layout Grid for Draggable Cards
         with elements("story_dashboard"):
             with dashboard.Grid(
                 layout=st.session_state.story_layout,
                 onLayoutChange=handle_layout_change,
                 key="story_grid",
             ):
-                for idx, artifact in enumerate(st.session_state.saved_story_charts):
+                for idx, _ in enumerate(st.session_state.saved_story_charts):
                     with html.Div(
                         key=f"chart_{idx}",
                         style={
                             "backgroundColor": "#F5F5F5",
-                            "height": "100%",
-                            "width": "100%",
                             "border": "1px solid #CCC",
                             "borderRadius": "6px",
-                            "padding": "10px",
-                            "overflow": "auto",
+                            "height": "100%",
+                            "width": "100%",
+                            "display": "flex",
+                            "justifyContent": "center",
+                            "alignItems": "center",
+                            "fontWeight": "bold",
+                            "color": "#333",
                         },
                     ):
-                        # Use Streamlit inside the box
-                        with st.container():
-                            tabs = st.tabs(["📊 Chart", "📋 Data", "💻 Code"])
+                        html.div(f"Chart {idx+1}")
 
-                            with tabs[0]:
-                                if "data" in artifact:
-                                    fig = artifact["data"]
-                                    if isinstance(fig, dict) and "data" in fig and "layout" in fig:
-                                        fig = pio.from_json(json.dumps(fig))
-                                    st.plotly_chart(fig, use_container_width=True)
-                                else:
-                                    st.write("_No chart available._")
+        # Render Actual Story Content below
+        st.write("---")
+        st.subheader("🧩 Your Story Cards")
 
-                            with tabs[1]:
-                                df_preview = artifact.get("data_preview")
-                                if df_preview is not None:
-                                    st.dataframe(df_preview)
-                                else:
-                                    st.write("_No data available._")
+        for idx, artifact in enumerate(st.session_state.saved_story_charts):
+            st.markdown(f"#### Card {idx+1}")
 
-                            with tabs[2]:
-                                code = artifact.get("code", "")
-                                if code:
-                                    st.code(code, language="python")
-                                else:
-                                    st.write("_No code available._")
+            with st.expander("📊 Expand to View Full Content", expanded=True):
+                tabs = st.tabs(["📈 Chart", "📋 Data", "💻 Code"])
+
+                with tabs[0]:
+                    if "data" in artifact:
+                        fig = artifact["data"]
+                        if isinstance(fig, dict) and "data" in fig and "layout" in fig:
+                            fig = pio.from_json(json.dumps(fig))
+                        st.plotly_chart(fig, use_container_width=True, key=f"plotly_chart_{idx}")  # 🛠️ add unique key
+                    else:
+                        st.write("_No chart available._")
+
+                with tabs[1]:
+                    df_preview = artifact.get("data_preview")
+                    if df_preview is not None:
+                        st.dataframe(df_preview, key=f"dataframe_preview_{idx}")  # 🛠️ add unique key
+                    else:
+                        st.write("_No data available._")
+
+                with tabs[2]:
+                    code = artifact.get("code", "")
+                    if code:
+                        st.code(code, language="python", key=f"code_block_{idx}")  # 🛠️ add unique key
+                    else:
+                        st.write("_No code available._")
+
+                if st.button(f"🗑️ Delete Card {idx+1}", key=f"delete_{idx}"):
+                    st.session_state.saved_story_charts.pop(idx)
+                    st.session_state.story_layout.pop(idx)
+                    st.success(f"Deleted Card {idx+1}")
+                    st.rerun()
