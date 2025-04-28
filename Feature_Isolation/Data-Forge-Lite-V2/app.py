@@ -124,7 +124,6 @@ def generate_root_summary_question(metadata_string: str) -> str:
     except Exception:
         return "Overview of the dataset"
 
-
 def get_assistant_interpretation(user_input, metadata, valid_columns):
     column_names = ', '.join(valid_columns)
 
@@ -191,7 +190,6 @@ def display_chat_history():
                     with st.expander(f"\U0001F4CE {artifact['title']}", expanded=True):
                         tabs = st.tabs(["📊 Output", "📋 Data Preview", "💻 Code"])
 
-                        # --- Code Tab First, to capture edits and trigger updates ---
                         with tabs[0]:
                             output_obj = st.session_state.get(output_key, artifact.get("data"))
                             render_type = artifact.get("render_type")
@@ -214,6 +212,7 @@ def display_chat_history():
                                 st.dataframe(output_obj, key=f"df_{output_key}")
                             else:
                                 st.write(output_obj)
+
                         with tabs[1]:
                             df_preview = artifact.get("data_preview")
                             if df_preview is not None:
@@ -224,66 +223,167 @@ def display_chat_history():
 
                         with tabs[2]:
                             code_before = st.session_state.get(editor_key, artifact.get("code", ""))
-                            editor_response = code_editor(
+                            code_editor(
                                 code=code_before,
                                 lang="python",
                                 theme="dracula",
                                 height=300,
-                                # buttons=[
-                                #     {
-                                #         "name": "Run",
-                                #         "feather": "Play",
-                                #         "primary": True,
-                                #         "hasText": True,
-                                #         "showWithIcon": True,
-                                #         "commands": ["submit"],
-                                #         "style": {"bottom": "0.44rem", "right": "0.4rem"}
-                                #     }
-                                # ],
                                 key=f"code_editor_{unique_key}"
                             )
 
-                            new_code = editor_response.get("text", "").strip()
+                        # 🔥 New: Add to Workshop Button
+                        if st.button("➕ Add to Workshop", key=f"add_to_workshop_{i}_{j}"):
+                            st.session_state.workshop_item = {
+                                "chart": artifact.get("data"),
+                                "data_preview": artifact.get("data_preview"),
+                                "code": artifact.get("code")
+                            }
+                            st.success("✅ Added to Workspace! Go to the Workspace tab.")
 
+def workshop_page():
+    import json
+    import plotly.io as pio
+    from code_editor import code_editor
+    from langchain_openai import ChatOpenAI
 
-                            #
-                            #
-                            # # Only run if the code has changed
-                            # if new_code and new_code != st.session_state.get(editor_key):
-                            #     try:
-                            #         exec_globals = {
-                            #             "df": st.session_state.df,
-                            #             "pd": pd,
-                            #             "np": np,
-                            #             "sns": sns,
-                            #             "go": go,
-                            #             "plt": plt,
-                            #             "pio": pio,
-                            #             "st": st,
-                            #             "json": json
-                            #         }
-                            #         exec_locals = {}
-                            #         exec(new_code, exec_globals, exec_locals)
-                            #
-                            #         output_obj = exec_locals.get("fig") or \
-                            #                      exec_locals.get("output") or \
-                            #                      exec_locals.get("fig_dict")
-                            #
-                            #         if isinstance(output_obj, dict) and "data" in output_obj and "layout" in output_obj:
-                            #             output_obj = pio.from_json(json.dumps(output_obj))
-                            #
-                            #         artifact["data"] = output_obj
-                            #         artifact["render_type"] = "plotly" if isinstance(output_obj, go.Figure) else "dataframe"
-                            #         st.session_state[editor_key] = new_code
-                            #         st.session_state[output_key] = output_obj
-                            #
-                            #     except Exception as e:
-                            #         st.error(f"Error executing code: {e}")
+    st.title("🔧 DataForge Workshop")
 
+    # 1) Nothing to do if no workshop item
+    if not st.session_state.get("workshop_item"):
+        st.info(
+            "Nothing in the Workshop yet. Go to the Data Analyst Agent or Mind Mapping page "
+            "and click ‘➕ Add to Workshop’ on an artifact."
+        )
+        return
 
-# -------------- Page Layouts -------------- #
+    item = st.session_state.workshop_item
 
-PAGE_OPTIONS = ['Data Upload', 'Mind Mapping', "Data Analyst Agent"]
+    # 2) Initialize the code buffer on first load
+    if "workshop_code_text" not in st.session_state:
+        st.session_state.workshop_code_text = item.get("code", "")
+
+    # 3) Create four tabs
+    chart_tab, table_tab, code_tab, ai_tab = st.tabs(
+        ["📈 Chart", "📋 Table", "💻 Code", "✍️ AI Request"]
+    )
+
+    # 4) Placeholders for chart & table
+    with chart_tab:
+        chart_ph = st.empty()
+    with table_tab:
+        table_ph = st.empty()
+
+    # 5) Initial render of existing chart + table
+    fig = item.get("chart")
+    if fig:
+        if isinstance(fig, dict) and "data" in fig and "layout" in fig:
+            fig = pio.from_json(json.dumps(fig))
+        chart_ph.plotly_chart(fig, use_container_width=True)
+    else:
+        chart_ph.info("No chart available yet.")
+
+    df_prev = item.get("data_preview")
+    if df_prev is not None:
+        table_ph.dataframe(df_prev, use_container_width=True)
+    else:
+        table_ph.info("No data preview available.")
+
+    # 6) Code tab: embedded Run button in the editor
+    with code_tab:
+        editor_response = code_editor(
+            code=st.session_state.workshop_code_text,
+            lang="python",
+            theme="dracula",
+            height=400,
+            key="workshop_code_editor_block",
+            buttons=[{
+                "name":    "▶️ Run",    # label
+                "feather": "Play",      # icon
+                "primary": True,
+                "commands": ["submit"],
+                "style":   {"bottom": "0.5rem", "right": "0.5rem"}
+            }],
+        )
+
+        new_code = editor_response.get("text", "")
+
+        # Only re-run if the user actually clicked Run (text changed)
+        if new_code and new_code != st.session_state.workshop_code_text:
+            st.session_state.workshop_code_text = new_code
+
+            try:
+                # Execute the updated code
+                exec_globals = {
+                    "df": st.session_state.get("df"),
+                    "pd": pd, "np": np, "sns": sns,
+                    "go": go, "plt": plt, "pio": pio,
+                    "st": st, "json": json,
+                }
+                exec_locals = {}
+                exec(new_code, exec_globals, exec_locals)
+
+                # Capture new figure if any
+                out = (
+                    exec_locals.get("fig")
+                    or exec_locals.get("output")
+                    or exec_locals.get("fig_dict")
+                )
+                if out:
+                    if isinstance(out, dict) and "data" in out and "layout" in out:
+                        out = pio.from_json(json.dumps(out))
+                    item["chart"] = out
+                    chart_ph.empty()
+                    chart_ph.plotly_chart(out, use_container_width=True)
+
+                # Capture new dataframe if any
+                new_df = exec_locals.get("df")
+                if new_df is not None:
+                    item["data_preview"] = new_df
+                    table_ph.empty()
+                    table_ph.dataframe(new_df, use_container_width=True)
+
+                # Persist changes
+                item["code"] = new_code
+                st.session_state.workshop_item = item
+
+                st.success("✅ Code executed—chart & table updated!")
+            except Exception as e:
+                st.error(f"Error running updated code: {e}")
+
+    # 7) AI-assisted rewrite tab
+    with ai_tab:
+        st.write("### ✍️ Request AI to update your code")
+        user_req = st.text_input("Enter your modification request:", key="ai_request")
+        if st.button("🤖 Rewrite Code with AI"):
+            if not user_req:
+                st.warning("Please enter a request first!")
+            else:
+                try:
+                    llm = ChatOpenAI(
+                        model="gpt-4o-mini",
+                        openai_api_key=st.session_state["OPENAI_API_KEY"],
+                    )
+                    resp = llm.invoke(f"""
+Please take the following Python code and modify it based on this request:
+Request: {user_req}
+
+Python Code:
+{item['code']}
+
+Provide only the modified code, without extra explanations.
+""")
+                    rewritten = resp.content.strip()
+
+                    # Persist AI rewrite and reload editor buffer
+                    item["code"] = rewritten
+                    st.session_state.workshop_code_text = rewritten
+                    st.session_state.workshop_item = item
+
+                    st.success("✅ Code updated by AI! Switch to the Code tab to review.")
+                except Exception as e:
+                    st.error(f"Error updating code with AI: {e}")
+
+PAGE_OPTIONS = ['Data Upload', 'Mind Mapping', "Data Analyst Agent", "Workspace"]
 page = st.sidebar.radio('Select a Page', PAGE_OPTIONS)
 
 # -------------- Main -------------- #
@@ -413,7 +513,6 @@ if __name__ == "__main__":
                 st.subheader("STEP 5) Feature Engineering Agent - Generated Code")
                 st.code(st.session_state.feature_engineering_code, language='python')
 
-
     elif page == 'Mind Mapping':
         st.title('🧠 Mind Mapping + Agentic Exploration')
 
@@ -504,7 +603,7 @@ if __name__ == "__main__":
         else:
             st.info("Start clicking nodes on the mind map to populate your exploration path!")
 
-    elif page=='Data Analyst Agent':
+    elif page == 'Data Analyst Agent':
         st.subheader('Pandas Data Analyst Mode')
         msgs = StreamlitChatMessageHistory(key="pandas_data_analyst_messages")
         if len(msgs.messages) == 0:
@@ -584,4 +683,10 @@ if __name__ == "__main__":
                 except Exception as e:
                     error_msg = f"Error: {e}"
                     msgs.add_ai_message(error_msg)
+
+
+
         display_chat_history()
+
+    elif page == "Workspace":
+        workshop_page()
