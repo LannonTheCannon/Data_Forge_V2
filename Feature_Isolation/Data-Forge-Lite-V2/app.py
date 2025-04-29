@@ -248,7 +248,7 @@ def workshop_page():
 
     st.title("🔧 DataForge Workshop")
 
-    # 1) Nothing to do if no workshop item
+    # 1) Exit early if nothing’s been added yet
     if not st.session_state.get("workshop_item"):
         st.info(
             "Nothing in the Workshop yet. Go to the Data Analyst Agent or Mind Mapping page "
@@ -258,47 +258,56 @@ def workshop_page():
 
     item = st.session_state.workshop_item
 
-    # 2) Initialize the code buffer on first load
+    # 2) Initialize code buffer & version counter
     if "workshop_code_text" not in st.session_state:
         st.session_state.workshop_code_text = item.get("code", "")
+    if "workshop_version" not in st.session_state:
+        st.session_state.workshop_version = 0
+    version = st.session_state.workshop_version
 
-    # 3) Create four tabs
+    # 3) Build tabs & placeholders
     chart_tab, table_tab, code_tab, ai_tab = st.tabs(
         ["📈 Chart", "📋 Table", "💻 Code", "✍️ AI Request"]
     )
-
-    # 4) Placeholders for chart & table
     with chart_tab:
         chart_ph = st.empty()
     with table_tab:
         table_ph = st.empty()
 
-    # 5) Initial render of existing chart + table
+    # 4) Render chart + table with versioned keys
     fig = item.get("chart")
     if fig:
         if isinstance(fig, dict) and "data" in fig and "layout" in fig:
             fig = pio.from_json(json.dumps(fig))
-        chart_ph.plotly_chart(fig, use_container_width=True)
+        chart_ph.plotly_chart(
+            fig,
+            use_container_width=True,
+            key=f"workshop_chart_{version}"
+        )
     else:
         chart_ph.info("No chart available yet.")
 
     df_prev = item.get("data_preview")
     if df_prev is not None:
-        table_ph.dataframe(df_prev, use_container_width=True)
+        table_ph.dataframe(
+            df_prev,
+            use_container_width=True,
+            key=f"workshop_table_{version}"
+        )
     else:
         table_ph.info("No data preview available.")
 
-    # 6) Code tab: embedded Run button in the editor
+    # 5) Code tab: editor with built-in Run button
     with code_tab:
         editor_response = code_editor(
             code=st.session_state.workshop_code_text,
             lang="python",
             theme="dracula",
             height=400,
-            key="workshop_code_editor_block",
+            key=f"workshop_code_editor_{version}",   # dynamic key!
             buttons=[{
-                "name":    "▶️ Run",    # label
-                "feather": "Play",      # icon
+                "name":    "▶️ Run",
+                "feather": "Play",
                 "primary": True,
                 "commands": ["submit"],
                 "style":   {"bottom": "0.5rem", "right": "0.5rem"}
@@ -306,13 +315,11 @@ def workshop_page():
         )
 
         new_code = editor_response.get("text", "")
-
-        # Only re-run if the user actually clicked Run (text changed)
+        # Only re‐exec if they actually clicked Run (text changed)
         if new_code and new_code != st.session_state.workshop_code_text:
             st.session_state.workshop_code_text = new_code
 
             try:
-                # Execute the updated code
                 exec_globals = {
                     "df": st.session_state.get("df"),
                     "pd": pd, "np": np, "sns": sns,
@@ -322,7 +329,7 @@ def workshop_page():
                 exec_locals = {}
                 exec(new_code, exec_globals, exec_locals)
 
-                # Capture new figure if any
+                # Capture new figure
                 out = (
                     exec_locals.get("fig")
                     or exec_locals.get("output")
@@ -332,28 +339,47 @@ def workshop_page():
                     if isinstance(out, dict) and "data" in out and "layout" in out:
                         out = pio.from_json(json.dumps(out))
                     item["chart"] = out
-                    chart_ph.empty()
-                    chart_ph.plotly_chart(out, use_container_width=True)
 
-                # Capture new dataframe if any
+                # Capture new dataframe
                 new_df = exec_locals.get("df")
                 if new_df is not None:
                     item["data_preview"] = new_df
-                    table_ph.empty()
-                    table_ph.dataframe(new_df, use_container_width=True)
 
-                # Persist changes
+                # Persist code + outputs
                 item["code"] = new_code
                 st.session_state.workshop_item = item
+
+                # Bump version so keys change
+                st.session_state.workshop_version += 1
+                new_version = st.session_state.workshop_version
+
+                # Clear old and redraw under new keys
+                chart_ph.empty()
+                table_ph.empty()
+                if item.get("chart"):
+                    chart_ph.plotly_chart(
+                        item["chart"],
+                        use_container_width=True,
+                        key=f"workshop_chart_{new_version}"
+                    )
+                if item.get("data_preview") is not None:
+                    table_ph.dataframe(
+                        item["data_preview"],
+                        use_container_width=True,
+                        key=f"workshop_table_{new_version}"
+                    )
 
                 st.success("✅ Code executed—chart & table updated!")
             except Exception as e:
                 st.error(f"Error running updated code: {e}")
 
-    # 7) AI-assisted rewrite tab
+    # 6) AI-assisted rewrite tab
     with ai_tab:
         st.write("### ✍️ Request AI to update your code")
-        user_req = st.text_input("Enter your modification request:", key="ai_request")
+        user_req = st.text_input(
+            "Enter your modification request:",
+            key=f"ai_request_{version}"       # also versioned
+        )
         if st.button("🤖 Rewrite Code with AI"):
             if not user_req:
                 st.warning("Please enter a request first!")
@@ -370,18 +396,22 @@ Request: {user_req}
 Python Code:
 {item['code']}
 
-Provide only the modified code, without extra explanations.
+Provide the entire modified code, without extra explanations or symbols.
 """)
                     rewritten = resp.content.strip()
 
-                    # Persist AI rewrite and reload editor buffer
+                    # Persist AI rewrite
                     item["code"] = rewritten
                     st.session_state.workshop_code_text = rewritten
                     st.session_state.workshop_item = item
 
+                    # Bump version so the editor remounts with new code
+                    st.session_state.workshop_version += 1
+
                     st.success("✅ Code updated by AI! Switch to the Code tab to review.")
                 except Exception as e:
                     st.error(f"Error updating code with AI: {e}")
+
 
 PAGE_OPTIONS = ['Data Upload', 'Mind Mapping', "Data Analyst Agent", "Workspace"]
 page = st.sidebar.radio('Select a Page', PAGE_OPTIONS)
