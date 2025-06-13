@@ -21,3 +21,4 @@ gdown
 streamlit-ace
 streamlit-elements
 streamlit-flow-component
+fickling>=0.1.3,~=0.1.0
