@@ -1,6 +1,7 @@
 # mindmap_config.py
 from itertools import cycle
-import math, random
+import math
+import secrets
 
 CATEGORY_CFG = {
     "Distribution":    {"color": "#4CAF50", "follow": ["Comparison", "Trend", "Outlier"]},
@@ -47,7 +48,7 @@ def sample_categories(parent_cat: str, seen: set[str], k_max: int = 3):
                 break
 
     probs = _softmax(scores)
-    n_children = random.randint(1, min(k_max, len(picks)))
-    return random.sample(picks, k=n_children) if len(picks) <= n_children else random.choices(picks, weights=probs, k=n_children)
+    n_children = secrets.SystemRandom().randint(1, min(k_max, len(picks)))
+    return secrets.SystemRandom().sample(picks, k=n_children) if len(picks) <= n_children else secrets.SystemRandom().choices(picks, weights=probs, k=n_children)
 
 

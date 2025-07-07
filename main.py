@@ -30,7 +30,6 @@ from streamlit_flow import streamlit_flow
 from streamlit_flow.elements import StreamlitFlowNode, StreamlitFlowEdge
 from streamlit_flow.state import StreamlitFlowState
 from streamlit_flow.layouts import ManualLayout, RadialLayout, TreeLayout
-import random
 from uuid import uuid4
 # ------------------------------------------------------------------
 
@@ -49,6 +48,8 @@ from ai_data_science_team import PandasDataAnalyst, DataWranglingAgent, DataVisu
 import plotly.graph_objects as go
 import plotly.io as pio
 from code_editor import code_editor
+import secrets
+
 # ------------------------------
 # Streamlit Layout
 # ------------------------------
@@ -400,7 +401,7 @@ def expand_node_with_questions(clicked_node):
 
         new_node = StreamlitFlowNode(
             new_node_id,
-            (random.randint(-100, 100), random.randint(-100, 100)),
+            (secrets.SystemRandom().randint(-100, 100), secrets.SystemRandom().randint(-100, 100)),
             {
                 "section_path": child_path,
                 "short_label": child_short_label,
@@ -453,7 +454,7 @@ def expand_root_node(clicked_node):
         child_id = f'{parent_path}.{i+1}'
         new_node = StreamlitFlowNode(
             child_id,
-            (random.randint(-100, 100), random.randint(-100, 100)),
+            (secrets.SystemRandom().randint(-100, 100), secrets.SystemRandom().randint(-100, 100)),
             {
                 "section_path": child_id,
                 "short_label": theme_label,

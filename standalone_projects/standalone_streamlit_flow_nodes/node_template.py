@@ -1,9 +1,7 @@
-import random
 from streamlit_flow.elements import StreamlitFlowNode
+import secrets
 
 COLOR_PALETTE = ["#FF6B6B", "#6BCB77", "#4D96FF", "#FFD93D", "#845EC2", "#F9A826"]
-
-import random
 from streamlit_flow.elements import StreamlitFlowNode
 
 class BaseNode:
@@ -14,7 +12,7 @@ class BaseNode:
         self.category = category
         self.node_type = node_type  # Must be: "theme", "question", or "terminal"
         self.parent_id = parent_id
-        self.color = color or random.choice(COLOR_PALETTE)
+        self.color = color or secrets.choice(COLOR_PALETTE)
         self.metadata = metadata or {}
         self.expanded = False
 
@@ -27,7 +25,7 @@ class BaseNode:
     def to_streamlit_node(self):
         return StreamlitFlowNode(
             self.node_id,
-            (random.randint(-100, 100), random.randint(-100, 100)),
+            (secrets.SystemRandom().randint(-100, 100), secrets.SystemRandom().randint(-100, 100)),
             {
                 "section_path": self.node_id,
                 "short_label": self.label,

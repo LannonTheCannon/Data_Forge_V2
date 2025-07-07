@@ -3,8 +3,8 @@ from streamlit_flow import streamlit_flow
 from streamlit_flow.elements import StreamlitFlowNode, StreamlitFlowEdge
 from streamlit_flow.state import StreamlitFlowState
 from streamlit_flow.layouts import ManualLayout  # Or TreeLayout, etc.
-import random
 from uuid import uuid4
+import secrets
 
 st.set_page_config(layout="wide")
 page = st.sidebar.radio("Go to", ["Flow Editor", "Inspector"])
@@ -28,7 +28,7 @@ if page == "Flow Editor":
     with col1:
         if st.button("Add Node"):
             new_node = StreamlitFlowNode(
-                str(uuid4()), (random.randint(0, 4), random.randint(0, 4)),
+                str(uuid4()), (secrets.SystemRandom().randint(0, 4), secrets.SystemRandom().randint(0, 4)),
                 {'content': f'Node {len(st.session_state.curr_state.nodes)+1}'},
                 'default', 'right', 'left'
             )

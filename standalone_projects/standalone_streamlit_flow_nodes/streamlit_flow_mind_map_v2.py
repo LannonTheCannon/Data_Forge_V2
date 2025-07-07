@@ -4,12 +4,12 @@ from streamlit_flow import streamlit_flow
 from streamlit_flow.elements import StreamlitFlowNode, StreamlitFlowEdge
 from streamlit_flow.state import StreamlitFlowState
 from streamlit_flow.layouts import TreeLayout
-import random
 import numpy as np
 # from standalone_projects.standalone_streamlit_flow_nodes.mindmap_config import sample_categories, CATEGORY_CFG
 import openai
 from mindmap_config import CATEGORY_CFG, sample_categories
 import re
+import secrets
 
 st.set_page_config(page_title="Advanced PandasAI + Vision Demo", layout="wide")
 client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
@@ -443,7 +443,7 @@ def expand_root_node(clicked_node):
 
             new_node = MMNode(
                 child_path,
-                (random.randint(-120, 120), random.randint(-120, 120)),
+                (secrets.SystemRandom().randint(-120, 120), secrets.SystemRandom().randint(-120, 120)),
                 label=label,
                 full_q=full_q,
                 category=cat,
@@ -533,7 +533,7 @@ def expand_node(clicked_node):
         # label = q_txt.split("?")[0][:30].strip()
         node_id = f"{parent_path}.{len(children)+1}"
         n = MMNode(node_id,
-                   (random.randint(-120, 120), random.randint(-120, 120)),
+                   (secrets.SystemRandom().randint(-120, 120), secrets.SystemRandom().randint(-120, 120)),
                    label, q_txt, cat, payload, parent_id=clicked_node.id)
         children.append(n)
 

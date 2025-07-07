@@ -4,13 +4,13 @@ from streamlit_flow import streamlit_flow
 from streamlit_flow.elements import StreamlitFlowNode, StreamlitFlowEdge
 from streamlit_flow.state import StreamlitFlowState
 from streamlit_flow.layouts import TreeLayout
-import random
 import numpy as np
 # from standalone_projects.standalone_streamlit_flow_nodes.mindmap_config import sample_categories, CATEGORY_CFG
 import openai
 from mindmap_config import CATEGORY_CFG, sample_categories
 import re
 from node_template import BaseNode, ThemeNode, QuestionNode, TerminalNode
+import secrets
 
 st.set_page_config(page_title="Advanced PandasAI + Vision Demo", layout="wide")
 client = openai.OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
@@ -273,7 +273,7 @@ def expand_root_node(clicked_node):
 
         new_node = StreamlitFlowNode(
             child_path,
-            (random.randint(-100, 100), random.randint(-100, 100)),
+            (secrets.SystemRandom().randint(-100, 100), secrets.SystemRandom().randint(-100, 100)),
             node_data,
             "default",  # node shape/type
             "right",  # target handle position
@@ -330,7 +330,7 @@ def expand_node_with_questions(clicked_node):
 
         new_node = StreamlitFlowNode(
             child_path,
-            (random.randint(-100, 100), random.randint(-100, 100)),
+            (secrets.SystemRandom().randint(-100, 100), secrets.SystemRandom().randint(-100, 100)),
             node_data,
             "default",
             "right",

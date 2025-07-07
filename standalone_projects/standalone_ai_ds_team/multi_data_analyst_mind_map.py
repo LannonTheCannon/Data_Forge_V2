@@ -17,7 +17,8 @@ from streamlit_flow import streamlit_flow
 from streamlit_flow.elements import StreamlitFlowNode, StreamlitFlowEdge
 from streamlit_flow.state import StreamlitFlowState
 from streamlit_flow.layouts import ManualLayout, RadialLayout, TreeLayout
-import random
+import secrets
+
 # from standalone_projects.standalone_streamlit_flow_nodes.basic_streamlit_flow_nodes_4 import COLOR_PALETTE
 
 st.set_page_config(page_title="Advanced PandasAI + Vision Demo", layout="wide")
@@ -274,7 +275,7 @@ def expand_root_node(clicked_node):
 
         new_node = StreamlitFlowNode(
             child_path,
-            (random.randint(-100, 100), random.randint(-100, 100)),
+            (secrets.SystemRandom().randint(-100, 100), secrets.SystemRandom().randint(-100, 100)),
             node_data,
             "default",   # node shape/type
             "right",     # target handle position
@@ -330,7 +331,7 @@ def expand_node_with_questions(clicked_node):
 
         new_node = StreamlitFlowNode(
             child_path,
-            (random.randint(-100, 100), random.randint(-100, 100)),
+            (secrets.SystemRandom().randint(-100, 100), secrets.SystemRandom().randint(-100, 100)),
             node_data,
             "default",
             "right",

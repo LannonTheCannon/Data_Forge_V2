@@ -4,9 +4,9 @@ from streamlit_flow.elements import StreamlitFlowNode, StreamlitFlowEdge
 from streamlit_flow.state import StreamlitFlowState
 from streamlit_flow.layouts import TreeLayout
 import pandas as pd
-import random
 from uuid import uuid4
 from openai import OpenAI
+import secrets
 
 # ------------------------------
 # Config & API Init
@@ -113,7 +113,7 @@ with col1:
 with col2:
     if st.button("❌ Delete Random Node"):
         if len(st.session_state.curr_state.nodes) > 1:
-            node_to_delete = random.choice([n for n in st.session_state.curr_state.nodes if n.id != "root"])
+            node_to_delete = secrets.choice([n for n in st.session_state.curr_state.nodes if n.id != "root"])
             st.session_state.curr_state.nodes = [n for n in st.session_state.curr_state.nodes if n.id != node_to_delete.id]
             st.session_state.curr_state.edges = [e for e in st.session_state.curr_state.edges if e.source != node_to_delete.id and e.target != node_to_delete.id]
             st.rerun()
@@ -122,8 +122,8 @@ with col3:
     if st.button("🔗 Add Random Edge"):
         nodes = st.session_state.curr_state.nodes
         if len(nodes) > 1:
-            src = random.choice(nodes)
-            tgt = random.choice(nodes)
+            src = secrets.choice(nodes)
+            tgt = secrets.choice(nodes)
             if src.id != tgt.id:
                 edge_id = f"{src.id}-{tgt.id}"
                 if all(e.id != edge_id for e in st.session_state.curr_state.edges):
@@ -133,7 +133,7 @@ with col3:
 with col4:
     if st.button("✂️ Delete Random Edge"):
         if len(st.session_state.curr_state.edges) > 0:
-            edge = random.choice(st.session_state.curr_state.edges)
+            edge = secrets.choice(st.session_state.curr_state.edges)
             st.session_state.curr_state.edges = [e for e in st.session_state.curr_state.edges if e.id != edge.id]
             st.rerun()
 
@@ -142,7 +142,7 @@ with col5:
         nodes = [StreamlitFlowNode(str(uuid4()), (0, 0), {'content': f'Node {i}'}, 'default', 'right', 'left') for i in range(5)]
         edges = []
         for _ in range(4):
-            src, tgt = random.sample(nodes, 2)
+            src, tgt = secrets.SystemRandom().sample(nodes, 2)
             edge_id = f"{src.id}-{tgt.id}"
             edges.append(StreamlitFlowEdge(edge_id, src.id, tgt.id, animated=True))
         st.session_state.curr_state = StreamlitFlowState(nodes, edges)
